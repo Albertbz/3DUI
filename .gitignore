@@ -100,5 +100,7 @@ Nuget.config*
 **/Assets/Photon.meta
 **/Assets/Samples.meta
 **/Assets/Samples/
-# **/.utmp/
+**/.utmp/
 **/StreamingAssets/
+
+3DUI_BackUpThisFolder_ButDontShipItWithYourGame/
