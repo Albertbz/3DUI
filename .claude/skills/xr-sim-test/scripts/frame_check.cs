@@ -13,7 +13,7 @@ if (!HandPinchManager.IsProximityPinchActive || !frame.gameObject.activeSelf)
     log.AppendLine("no proximity pinch open; run frame_check.sh"); d.SetData("xrsim.done", true); return "no pinch";
 }
 var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
-var mat = (UnityEngine.Material)typeof(BoundaryFramePrefab).GetField("material", flags).GetValue(frame);
+var mat = frame.transform.Find("FrameQuad").GetComponent<FrameOutline>().Material;
 var audio = frame.GetComponent<FrameResizeAudio>();
 var hum = (UnityEngine.AudioSource)typeof(FrameResizeAudio).GetField("humSource", flags).GetValue(audio);
 var tick = (UnityEngine.AudioSource)typeof(FrameResizeAudio).GetField("tickSource", flags).GetValue(audio);

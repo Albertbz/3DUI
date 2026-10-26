@@ -28,6 +28,9 @@ Material:
     - _Activity: 0
     - _Appear: 1
     - _CornerRadius: 0.01
+    - _DashLength: 0.02
+    - _Dashed: 1
+    - _FillStrength: 1
     - _Padding: 0.03
     - _Style: 0
     - _Thickness: 0.004

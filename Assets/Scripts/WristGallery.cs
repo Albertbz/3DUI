@@ -28,6 +28,10 @@ public class WristGallery : MonoBehaviour
     [SerializeField] private float slotSpacing = 0.065f;
     [SerializeField] private float thumbnailGap = 0.01f;  // Minimum space between neighbouring thumbnails
 
+    [Header("Look (shares the capture frame's marching-ants outline)")]
+    [SerializeField] private float panelMargin = 0.012f;
+    [SerializeField] private float buttonSize = 0.025f;
+
     [Header("Palm-up detection")]
     [Tooltip("Palm normal in the wrist transform's local space. Tune this in play mode if the gallery shows on the wrong side.")]
     [SerializeField] private Vector3 palmNormalLocal = Vector3.down;
@@ -41,6 +45,8 @@ public class WristGallery : MonoBehaviour
     private float visibility;
     private float swipeStartX;
     private bool swiping;
+    private FrameOutline leftArrowOutline;
+    private FrameOutline rightArrowOutline;
 
     private void Awake()
     {
@@ -56,6 +62,10 @@ public class WristGallery : MonoBehaviour
             thumbnail.Init(library, photoPrefab, slotSpacing - thumbnailGap);
             thumbnails.Add(thumbnail);
         }
+
+        CreatePanel();
+        leftArrowOutline = StyleArrow(leftArrow);
+        rightArrowOutline = StyleArrow(rightArrow);
 
         if (captureIgnoreLayer >= 0)
         {
@@ -183,12 +193,64 @@ public class WristGallery : MonoBehaviour
 
     private void HandleLeftArrow(PointerEvent evt)
     {
-        if (evt.Type == PointerEventType.Select) Scroll(-1);
+        if (evt.Type != PointerEventType.Select) return;
+        Scroll(-1);
+        if (leftArrowOutline != null) leftArrowOutline.Activity = 1f;
     }
 
     private void HandleRightArrow(PointerEvent evt)
     {
-        if (evt.Type == PointerEventType.Select) Scroll(1);
+        if (evt.Type != PointerEventType.Select) return;
+        Scroll(1);
+        if (rightArrowOutline != null) rightArrowOutline.Activity = 1f;
+    }
+
+    // Backplate behind the strip and arrows with the capture frame's marching-ants border
+    private void CreatePanel()
+    {
+        float halfThumbWidth = (slotSpacing - thumbnailGap) * 0.5f;
+        float halfStrip = (visibleSlots - 1) * 0.5f * slotSpacing + halfThumbWidth;
+        float minX = stripRoot.localPosition.x - halfStrip;
+        float maxX = stripRoot.localPosition.x + halfStrip;
+        foreach (PokeInteractable arrow in new[] { leftArrow, rightArrow })
+        {
+            if (arrow == null) continue;
+            float x = visualRoot.InverseTransformPoint(arrow.transform.position).x;
+            minX = Mathf.Min(minX, x - buttonSize * 0.5f);
+            maxX = Mathf.Max(maxX, x + buttonSize * 0.5f);
+        }
+        float contentHeight = Mathf.Max(thumbnails.Count > 0 ? thumbnails[0].ThumbnailHeight : 0f, buttonSize);
+
+        FrameOutline panel = FrameOutline.Create(visualRoot, "Panel");
+        panel.transform.localPosition = new Vector3((minX + maxX) * 0.5f, stripRoot.localPosition.y, 0.006f); // Behind the content
+        panel.Size = new Vector2(maxX - minX + panelMargin * 2f, contentHeight + panelMargin * 2f);
+        panel.Thickness = 0.002f;
+        panel.CornerRadius = 0.01f;
+        panel.Padding = 0.01f;
+        panel.DashLength = 0.012f;
+        panel.FillStrength = 2f;
+    }
+
+    // Replaces the arrow's solid button with a rounded outline; the icon is tinted to match in its material
+    private FrameOutline StyleArrow(PokeInteractable arrow)
+    {
+        if (arrow == null) return null;
+
+        Transform button = arrow.transform.Find("Button");
+        if (button != null && button.TryGetComponent(out Renderer buttonRenderer))
+        {
+            buttonRenderer.enabled = false;
+        }
+
+        FrameOutline outline = FrameOutline.Create(arrow.transform, "Outline");
+        outline.transform.localPosition = button != null ? button.localPosition : Vector3.zero;
+        outline.Size = Vector2.one * buttonSize;
+        outline.Thickness = 0.0015f;
+        outline.CornerRadius = 0.006f;
+        outline.Padding = 0.008f;
+        outline.FillStrength = 2f;
+        outline.Dashed = false;
+        return outline;
     }
 
     private static void SetLayerRecursively(Transform root, int layer)

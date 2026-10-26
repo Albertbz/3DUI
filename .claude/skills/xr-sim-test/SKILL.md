@@ -67,6 +67,27 @@ Read `shots/camera_with_crop.png` and the newest photo; both should show the sam
 
 View `shots/frame_Viewfinder.png`, `frame_Glow.png`, `frame_MarchingAnts.png`, `frame_Glass.png` and `frame_too_small.png` (red tint). The sweep samples the shader's `_Valid`/`_Activity` and `FrameResizeAudio`'s hum pitch, volume and ticks. It can't tell you how the sound actually sounds. A frame hitch can merge ticks, since only one tick plays per frame. `frame_style.cs <Style>` switches the style during Play mode.
 
+**2c. Gallery look.** The gallery uses the frame's outline (`FrameOutline`): a marching-ants panel, solid thumbnail rims that switch to marching ants on hover or grab, and outlined arrows that brighten when pressed.
+
+```bash
+./ev.sh pose.cs face; sleep 1.5
+./ev.sh gallery_look.cs gallery_idle                # close-up render + every outline's size/dashed/activity
+./ev.sh gallery_look.cs x hover 0; ./ev.sh gallery_look.cs gallery_hover   # thumbnail 0 dashed=True
+./ev.sh gallery_look.cs x grab 0;  ./ev.sh gallery_look.cs gallery_grab    # dashed=True, activity ~1
+./ev.sh gallery_look.cs x clear 0
+```
+
+Render in a separate call after the event: the outline switches in the next `Update`. An arrow's press glow fades in 0.5 s, which is quicker than one CLI round trip. Set its outline's `ActivityDecay` to 0 before rendering, and back to 2 afterwards.
+
+**2d. Floating photo outline.** Captured and pulled-out photos have the same outline: a solid rim at rest, marching ants on hover or grab, and it fades out with a thrown photo. This needs a photo in the scene; `capture.sh` leaves one.
+
+```bash
+./ev.sh photo_look.cs photo_idle                                   # close-up render + outline state
+./ev.sh photo_look.cs x hover; ./ev.sh photo_look.cs photo_hover   # dashed=True
+./ev.sh photo_look.cs x grab;  ./ev.sh photo_look.cs photo_grab    # dashed=True, activity ~1
+./ev.sh photo_look.cs x clear
+```
+
 **3. Grabbing a photo.** This needs a photo in the scene; `capture.sh` leaves one.
 
 ```bash

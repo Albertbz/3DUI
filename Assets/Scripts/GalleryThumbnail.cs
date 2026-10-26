@@ -11,12 +11,17 @@ public class GalleryThumbnail : MonoBehaviour
     [SerializeField] private float pullOutDistance = 0.1f;
     [SerializeField] private float returnSpeed = 15f;
 
+    [Header("Outline")]
+    [SerializeField] private float outlineGap = 0.003f;       // Space between the photo and its rim
+    [SerializeField] private float outlineThickness = 0.0015f;
+
     private static readonly int MainTexId = Shader.PropertyToID("_MainTex");
 
     private static int heldCount;
     public static bool AnyHeld => heldCount > 0;
 
     public PhotoEntry Entry { get; private set; }
+    public float ThumbnailHeight => thumbnailHeight;
 
     private PhotoObject photoPrefab;
     private PhotoLibrary library;
@@ -25,10 +30,22 @@ public class GalleryThumbnail : MonoBehaviour
     private bool isHeld;
     private PhotoObject pulledPhoto;
     private float maxWidth = float.PositiveInfinity;
+    private FrameOutline outline;
+    private int hoverCount;
 
     private void Awake()
     {
         material = thumbnailRenderer.material;
+
+        // Same outline as the capture frame: a solid rim at rest, marching ants while hovered or held
+        outline = FrameOutline.Create(transform, "Outline");
+        outline.transform.localPosition = new Vector3(0f, 0f, 0.001f); // Just behind the photo
+        outline.Thickness = outlineThickness;
+        outline.CornerRadius = 0.004f;
+        outline.Padding = 0.008f;
+        outline.DashLength = 0.01f;
+        outline.FillStrength = 2f;
+        outline.Dashed = false;
     }
 
     private void OnEnable()
@@ -39,6 +56,7 @@ public class GalleryThumbnail : MonoBehaviour
     private void OnDisable()
     {
         grabbable.WhenPointerEventRaised -= HandlePointerEvent;
+        hoverCount = 0;
         Release();
     }
 
@@ -76,6 +94,7 @@ public class GalleryThumbnail : MonoBehaviour
         }
         thumbnailRenderer.transform.localScale = new Vector3(size.x, size.y, 1f);
         grabCollider.size = new Vector3(size.x, size.y, 0.01f);
+        outline.Size = size + Vector2.one * (outlineGap * 2f);
         material.SetTexture(MainTexId, entry.Thumbnail);
     }
 
@@ -83,6 +102,12 @@ public class GalleryThumbnail : MonoBehaviour
     {
         switch (evt.Type)
         {
+            case PointerEventType.Hover:
+                hoverCount++;
+                break;
+            case PointerEventType.Unhover:
+                hoverCount = Mathf.Max(0, hoverCount - 1);
+                break;
             case PointerEventType.Select:
                 if (!isHeld)
                 {
@@ -102,8 +127,11 @@ public class GalleryThumbnail : MonoBehaviour
 
     private void Update()
     {
+        outline.Dashed = isHeld || hoverCount > 0;
         if (isHeld)
         {
+            outline.Activity = 1f;
+
             if (pulledPhoto == null && transform.localPosition.magnitude > pullOutDistance)
             {
                 PullOut();
@@ -135,6 +163,7 @@ public class GalleryThumbnail : MonoBehaviour
         pulledPhoto.BeginExternalHold();
 
         thumbnailRenderer.enabled = false;
+        outline.gameObject.SetActive(false);
     }
 
     private void Release()
@@ -156,5 +185,6 @@ public class GalleryThumbnail : MonoBehaviour
             transform.localRotation = Quaternion.identity;
         }
         thumbnailRenderer.enabled = true;
+        outline.gameObject.SetActive(true);
     }
 }

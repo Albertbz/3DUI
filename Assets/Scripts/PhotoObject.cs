@@ -8,7 +8,10 @@ public class PhotoObject : MonoBehaviour
     [SerializeField] private BoxCollider grabCollider;
     [SerializeField] private Rigidbody body;              // Kinematic while floating
     [SerializeField] private PointableElement grabbable;  // Grabbable on this object
-    [SerializeField] private BoundaryFramePrefab border;  // Optional
+
+    [Header("Outline")]
+    [SerializeField] private float outlineGap = 0.004f;       // Space between the photo and its rim
+    [SerializeField] private float outlineThickness = 0.0025f;
 
     [Header("Appear")]
     [SerializeField] private float flashDuration = 0.4f;
@@ -33,6 +36,8 @@ public class PhotoObject : MonoBehaviour
     private Texture ownedTexture;
     private Vector2 size;
     private bool dismissing;
+    private FrameOutline outline;
+    private int hoverCount;
 
     // Recent positions while held, used to estimate release velocity
     private const int VelocitySamples = 5;
@@ -46,6 +51,16 @@ public class PhotoObject : MonoBehaviour
         material = photoRenderer.material; // Instance, so each photo has its own texture and flash
         body.isKinematic = true;
         body.useGravity = false;
+
+        // Same outline as the capture frame and gallery, so the photo reads as an object in the room:
+        // a solid rim at rest, marching ants while hovered or held
+        outline = FrameOutline.Create(transform, "Outline");
+        outline.transform.localPosition = new Vector3(0f, 0f, 0.001f); // Just behind the photo
+        outline.Thickness = outlineThickness;
+        outline.CornerRadius = 0.006f;
+        outline.Padding = 0.015f;
+        outline.DashLength = 0.015f;
+        outline.Dashed = false;
     }
 
     private void OnEnable()
@@ -62,6 +77,7 @@ public class PhotoObject : MonoBehaviour
         {
             grabbable.WhenPointerEventRaised -= HandlePointerEvent;
         }
+        hoverCount = 0;
         SetHeld(false);
     }
 
@@ -89,6 +105,7 @@ public class PhotoObject : MonoBehaviour
 
         if (flash)
         {
+            outline.Activity = 1f;
             StartCoroutine(FlashRoutine());
         }
     }
@@ -104,10 +121,7 @@ public class PhotoObject : MonoBehaviour
         size = newSize;
         photoRenderer.transform.localScale = new Vector3(size.x, size.y, 1f);
         grabCollider.size = new Vector3(size.x, size.y, 0.01f);
-        if (border != null)
-        {
-            border.SetDimensions(size.x, size.y);
-        }
+        outline.Size = size + Vector2.one * (outlineGap * 2f);
     }
 
     private void HandlePointerEvent(PointerEvent evt)
@@ -119,6 +133,12 @@ public class PhotoObject : MonoBehaviour
 
         switch (evt.Type)
         {
+            case PointerEventType.Hover:
+                hoverCount++;
+                break;
+            case PointerEventType.Unhover:
+                hoverCount = Mathf.Max(0, hoverCount - 1);
+                break;
             case PointerEventType.Select:
                 if (!IsHeld)
                 {
@@ -166,8 +186,10 @@ public class PhotoObject : MonoBehaviour
 
     private void Update()
     {
+        outline.Dashed = !dismissing && (IsHeld || hoverCount > 0);
         if (IsHeld)
         {
+            outline.Activity = 1f;
             samplePositions[sampleIndex] = transform.position;
             sampleTimes[sampleIndex] = Time.time;
             sampleIndex = (sampleIndex + 1) % VelocitySamples;
@@ -230,6 +252,7 @@ public class PhotoObject : MonoBehaviour
             float k = t / fadeDuration;
             transform.localScale = startScale * (1f - k);
             material.SetFloat(AlphaId, 1f - k);
+            outline.Appear = 1f - k;
             yield return null;
         }
 

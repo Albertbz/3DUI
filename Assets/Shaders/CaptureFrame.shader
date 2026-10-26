@@ -12,6 +12,9 @@ Shader "3DUI/CaptureFrame"
         _Padding ("Quad Padding (m)", Float) = 0.03
         _Thickness ("Line Thickness (m)", Float) = 0.004
         _CornerRadius ("Corner Radius (m)", Float) = 0.01
+        _Dashed ("Dashed (Marching Ants)", Range(0, 1)) = 1
+        _DashLength ("Dash Length (m)", Float) = 0.02
+        _FillStrength ("Fill Strength", Float) = 1
         _Valid ("Valid", Range(0, 1)) = 1
         _Activity ("Resize Activity", Range(0, 1)) = 0
         _Appear ("Appear", Range(0, 1)) = 1
@@ -53,6 +56,9 @@ Shader "3DUI/CaptureFrame"
             float _Padding;
             float _Thickness;
             float _CornerRadius;
+            float _Dashed;
+            float _DashLength;
+            float _FillStrength;
             float _Valid;
             float _Activity;
             float _Appear;
@@ -148,11 +154,12 @@ Shader "3DUI/CaptureFrame"
                 else if (_Style < 2.5)
                 {
                     // Marching ants: dashed outline that tiles exactly around the perimeter
+                    // (_Dashed = 0 draws the same outline solid, for idle UI elements)
                     float perimeter = 4.0 * (h.x + h.y);
-                    float dashCount = max(4.0, round(perimeter / 0.02));
+                    float dashCount = max(4.0, round(perimeter / max(_DashLength, 1e-3)));
                     float s = perimeterCoord(p, h) / perimeter * dashCount - _Time.y * 1.5;
                     float dash = smoothstep(0.45, 0.55, frac(s)) * (1.0 - smoothstep(0.95, 1.0, frac(s)));
-                    dash = max(dash, 0.25);
+                    dash = max(dash, lerp(1.0, 0.25, _Dashed));
 
                     line_ = band(d, t) * dash;
                     glow = exp(-abs(d) / 0.004) * 0.2;
@@ -169,6 +176,8 @@ Shader "3DUI/CaptureFrame"
                     fill = inside * (0.1 + 0.06 * topLight) + innerShade * 0.12;
                     glow = exp(-max(d, 0) / 0.005) * (1.0 - inside) * 0.15;
                 }
+
+                fill *= _FillStrength;
 
                 // Fade the halo out before it reaches the quad's edge
                 glow *= 1.0 - smoothstep(_Padding * 0.4, _Padding * 0.95, d);
