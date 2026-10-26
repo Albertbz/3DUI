@@ -4,6 +4,14 @@ public class ImageBoundaryBox : MonoBehaviour
 {
     [SerializeField] private BoundaryFramePrefab boundaryFrame;
     [SerializeField] private Camera head;
+    [SerializeField] private PhotoCapture photoCapture;
+    [SerializeField] private float minCaptureSize = 0.05f; // 5 cm, ignore accidental tiny frames
+
+    // Last frame computed while pinching, used for the capture on release
+    private readonly Vector3[] lastCorners = new Vector3[4];
+    private Pose lastPose;
+    private float lastWidth;
+    private float lastHeight;
 
     private void Awake()
     {
@@ -32,8 +40,21 @@ public class ImageBoundaryBox : MonoBehaviour
 
     private void HandleProximityPinchRelease(Vector3 leftHandPosition, Vector3 rightHandPosition)
     {
+        // Hide the frame first so it can never end up in the photo
         EnableBoundaryFrame(false);
-        // TODO: Handle taking screenshot using the framed dimensions
+
+        if (photoCapture == null)
+        {
+            return;
+        }
+
+        if (lastWidth < minCaptureSize || lastHeight < minCaptureSize)
+        {
+            Debug.Log($"Frame too small to capture ({lastWidth:F3} x {lastHeight:F3} m).");
+            return;
+        }
+
+        photoCapture.Capture(lastCorners, lastPose, lastWidth, lastHeight);
     }
 
     private void HandleProximityPinchUpdate(Vector3 leftHandPosition, Vector3 rightHandPosition)
@@ -71,5 +92,17 @@ public class ImageBoundaryBox : MonoBehaviour
 
         // 4. Update the prefab's internal edge positions/scales
         boundaryFrame.SetDimensions(width, height);
+        boundaryFrame.SetCapturable(width >= minCaptureSize && height >= minCaptureSize);
+
+        // 5. Remember the frame so it can be captured on release
+        Vector3 right = frameRotation * Vector3.right * (width * 0.5f);
+        Vector3 up = frameRotation * Vector3.up * (height * 0.5f);
+        lastCorners[0] = center - right - up;
+        lastCorners[1] = center + right - up;
+        lastCorners[2] = center + right + up;
+        lastCorners[3] = center - right + up;
+        lastPose = new Pose(center, frameRotation);
+        lastWidth = width;
+        lastHeight = height;
     }
 }

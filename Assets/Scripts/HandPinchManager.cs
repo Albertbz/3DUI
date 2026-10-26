@@ -29,6 +29,9 @@ public class HandPinchManager : MonoBehaviour
 
     private bool performingProximityPinch = false;
 
+    // Lets other systems (e.g. the wrist gallery) react while the frame is being drawn
+    public static bool IsProximityPinchActive { get; private set; }
+
     private void Awake()
     {
         leftState = new HandState { Type = HandType.Left, Hand = leftHand };
@@ -60,7 +63,7 @@ public class HandPinchManager : MonoBehaviour
             }
         }
 
-        if (performingProximityPinch)
+        if (performingProximityPinch && leftHand != null && rightHand != null)
         {
             // Update the proximity pinch event with the current position of each PointerPose
             OnProximityPinchUpdated?.Invoke(leftHand.PointerPose.position, rightHand.PointerPose.position);
@@ -106,6 +109,7 @@ public class HandPinchManager : MonoBehaviour
         if (performingProximityPinch)
         {
             performingProximityPinch = false;
+            IsProximityPinchActive = false;
             Vector3 leftHandPosition = leftHand.PointerPose.position;
             Vector3 rightHandPosition = rightHand.PointerPose.position;
             OnProximityPinchReleased?.Invoke(leftHandPosition, rightHandPosition);
@@ -115,6 +119,12 @@ public class HandPinchManager : MonoBehaviour
 
     private void OnSecondaryPinchStarted(HandState primary, HandState secondary)
     {
+        // A pinch that is grabbing a photo or thumbnail should not open the capture frame
+        if (PhotoObject.AnyHeld || GalleryThumbnail.AnyHeld)
+        {
+            return;
+        }
+
         if (!performingProximityPinch)
         {
             // Check distance between the two pinches
@@ -133,6 +143,7 @@ public class HandPinchManager : MonoBehaviour
                 Vector3 rightHandPosition = rightHand.PointerPose.position;
 
                 performingProximityPinch = true;
+                IsProximityPinchActive = true;
                 OnProximityPinchTriggered?.Invoke(leftHandPosition, rightHandPosition);
             }
 

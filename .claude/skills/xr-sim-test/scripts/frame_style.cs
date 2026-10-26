@@ -1,0 +1,5 @@
+// frame_style.cs <Viewfinder|Glow|MarchingAnts|Glass> : switches the capture frame's style in Play mode
+var frame = UnityEngine.Object.FindFirstObjectByType<BoundaryFramePrefab>(UnityEngine.FindObjectsInactive.Include);
+var field = typeof(BoundaryFramePrefab).GetField("style", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+field.SetValue(frame, System.Enum.Parse(typeof(BoundaryFramePrefab.FrameStyle), "__ARG1__"));
+return $"style={field.GetValue(frame)}";
