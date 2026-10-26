@@ -3,8 +3,8 @@
 // the head, so the gallery has content. Uses the simulator's synthetic passthrough camera when it plays.
 // The spawned photo objects are removed; the photos stay in the library (on disk).
 int count = int.TryParse("__ARG1__", out var c) ? c : 6;
-var capture = UnityEngine.Object.FindFirstObjectByType<PhotoCapture>();
-var lib = UnityEngine.Object.FindFirstObjectByType<PhotoLibrary>();
+var capture = UnityEngine.Object.FindFirstObjectByType<SpatialPhotos.PhotoCapture>();
+var lib = UnityEngine.Object.FindFirstObjectByType<SpatialPhotos.PhotoLibrary>();
 var pca = UnityEngine.Object.FindFirstObjectByType<Meta.XR.PassthroughCameraAccess>();
 var head = UnityEngine.GameObject.Find("[BuildingBlock] Camera Rig/TrackingSpace/CenterEyeAnchor").transform;
 for (int i = 0; i < count; i++)
@@ -15,5 +15,5 @@ for (int i = 0; i < count; i++)
     var r = rot * UnityEngine.Vector3.right * (w / 2); var u = rot * UnityEngine.Vector3.up * (h / 2);
     capture.Capture(new[] { center - r - u, center + r - u, center + r + u, center - r + u }, new UnityEngine.Pose(center, rot), w, h);
 }
-foreach (var p in UnityEngine.Object.FindObjectsByType<PhotoObject>(UnityEngine.FindObjectsSortMode.None)) UnityEngine.Object.Destroy(p.gameObject);
+foreach (var p in UnityEngine.Object.FindObjectsByType<SpatialPhotos.PhotoObject>(UnityEngine.FindObjectsSortMode.None)) UnityEngine.Object.Destroy(p.gameObject);
 return $"library={lib.Entries.Count}; passthrough camera playing={pca != null && pca.IsPlaying}";

@@ -3,21 +3,21 @@
 // Moves the frozen hands' pointer poses smoothly: too small -> grow -> hold still -> shrink,
 // and samples the frame material (_Valid, _Activity) and FrameResizeAudio's hum and ticks.
 // Runs as a coroutine; read the result with wait_log.sh.
-var runner = UnityEngine.Object.FindFirstObjectByType<PhotoLibrary>();
+var runner = UnityEngine.Object.FindFirstObjectByType<SpatialPhotos.PhotoLibrary>();
 var log = new System.Text.StringBuilder();
 var d = System.AppDomain.CurrentDomain;
 d.SetData("xrsim.log", log); d.SetData("xrsim.done", null);
-var frame = UnityEngine.Object.FindFirstObjectByType<BoundaryFramePrefab>(UnityEngine.FindObjectsInactive.Include);
-if (!HandPinchManager.IsProximityPinchActive || !frame.gameObject.activeSelf)
+var frame = UnityEngine.Object.FindFirstObjectByType<SpatialPhotos.CaptureFrameVisual>(UnityEngine.FindObjectsInactive.Include);
+if (!SpatialPhotos.HandPinchManager.IsProximityPinchActive || !frame.gameObject.activeSelf)
 {
     log.AppendLine("no proximity pinch open; run frame_check.sh"); d.SetData("xrsim.done", true); return "no pinch";
 }
 var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
-var mat = frame.transform.Find("FrameQuad").GetComponent<FrameOutline>().Material;
-var audio = frame.GetComponent<FrameResizeAudio>();
-var hum = (UnityEngine.AudioSource)typeof(FrameResizeAudio).GetField("humSource", flags).GetValue(audio);
-var tick = (UnityEngine.AudioSource)typeof(FrameResizeAudio).GetField("tickSource", flags).GetValue(audio);
-var lastTickField = typeof(FrameResizeAudio).GetField("lastTickTime", flags);
+var mat = frame.transform.Find("FrameQuad").GetComponent<SpatialPhotos.FrameOutline>().Material;
+var audio = frame.GetComponent<SpatialPhotos.FrameResizeAudio>();
+var hum = (UnityEngine.AudioSource)typeof(SpatialPhotos.FrameResizeAudio).GetField("humSource", flags).GetValue(audio);
+var tick = (UnityEngine.AudioSource)typeof(SpatialPhotos.FrameResizeAudio).GetField("tickSource", flags).GetValue(audio);
+var lastTickField = typeof(SpatialPhotos.FrameResizeAudio).GetField("lastTickTime", flags);
 var head = UnityEngine.GameObject.Find("[BuildingBlock] Camera Rig/TrackingSpace/CenterEyeAnchor").transform;
 OVRHand Hand(string side) => UnityEngine.GameObject.Find($"[BuildingBlock] Camera Rig/TrackingSpace/{side}HandAnchor").GetComponentInChildren<OVRHand>(true);
 var left = Hand("Left"); var right = Hand("Right");
@@ -31,7 +31,7 @@ void Place(float a)
 }
 
 var quad = frame.transform.Find("FrameQuad");
-log.AppendLine($"setup: quad layer={UnityEngine.LayerMask.LayerToName(quad.gameObject.layer)} shader={mat.shader.name} legacy edges hidden={frame.transform.Find("TopEdge") == null || !frame.transform.Find("TopEdge").gameObject.activeSelf} (expect CaptureIgnore 3DUI/CaptureFrame True)");
+log.AppendLine($"setup: quad layer={UnityEngine.LayerMask.LayerToName(quad.gameObject.layer)} shader={mat.shader.name} (expect CaptureIgnore 3DUI/CaptureFrame)");
 
 System.Collections.IEnumerator Phase(float from, float to, float seconds, System.Collections.Generic.List<string> ticks, float[] stats)
 {

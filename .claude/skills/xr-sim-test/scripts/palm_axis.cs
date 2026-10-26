@@ -1,7 +1,7 @@
 // Measures which LeftHandAnchor axis points out of the palm, from the simulated hand's joints
 // (Interaction SDK hand), and compares it with WristGallery's Palm Normal Local.
 var lAnchor = UnityEngine.GameObject.Find("[BuildingBlock] Camera Rig/TrackingSpace/LeftHandAnchor").transform;
-var g = UnityEngine.Object.FindFirstObjectByType<WristGallery>();
+var g = UnityEngine.Object.FindFirstObjectByType<SpatialPhotos.WristGallery>();
 var configured = new UnityEditor.SerializedObject(g).FindProperty("palmNormalLocal").vector3Value;
 foreach (var h in UnityEngine.Object.FindObjectsByType<Oculus.Interaction.Input.Hand>(UnityEngine.FindObjectsSortMode.None))
 {

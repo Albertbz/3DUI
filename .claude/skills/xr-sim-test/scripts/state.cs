@@ -3,7 +3,7 @@
 // content only; the simulator's passthrough room is not in it) to __OUT__/shots/<name>.png.
 var head = UnityEngine.GameObject.Find("[BuildingBlock] Camera Rig/TrackingSpace/CenterEyeAnchor").transform;
 var lA = UnityEngine.GameObject.Find("[BuildingBlock] Camera Rig/TrackingSpace/LeftHandAnchor").transform;
-var g = UnityEngine.Object.FindFirstObjectByType<WristGallery>();
+var g = UnityEngine.Object.FindFirstObjectByType<SpatialPhotos.WristGallery>();
 var v = g.transform.Find("Visual");
 var gso = new UnityEditor.SerializedObject(g);
 var palmLocal = gso.FindProperty("palmNormalLocal").vector3Value;
@@ -17,10 +17,10 @@ if (v.gameObject.activeSelf)
     s.Append($" facesViewer={UnityEngine.Vector3.Dot(-v.forward, toView):F2} upright={UnityEngine.Vector3.Dot(v.up, head.up):F2} notMirrored={UnityEngine.Vector3.Dot(v.right, head.right):F2} dist={UnityEngine.Vector3.Distance(v.position, head.position):F2}m");
     if (l != null && r != null) s.Append($" width={UnityEngine.Vector3.Angle(l.position - head.position, r.position - head.position):F0}°");
 }
-var frame = UnityEngine.Object.FindFirstObjectByType<BoundaryFramePrefab>(UnityEngine.FindObjectsInactive.Include);
-var lib = UnityEngine.Object.FindFirstObjectByType<PhotoLibrary>();
-var photos = UnityEngine.Object.FindObjectsByType<PhotoObject>(UnityEngine.FindObjectsSortMode.None);
-s.Append($"\ncapture: pinchActive={HandPinchManager.IsProximityPinchActive} frameActive={frame.gameObject.activeSelf} library={lib.Entries.Count} photosInScene={photos.Length} photoHeld={PhotoObject.AnyHeld} thumbHeld={GalleryThumbnail.AnyHeld}");
+var frame = UnityEngine.Object.FindFirstObjectByType<SpatialPhotos.CaptureFrameVisual>(UnityEngine.FindObjectsInactive.Include);
+var lib = UnityEngine.Object.FindFirstObjectByType<SpatialPhotos.PhotoLibrary>();
+var photos = UnityEngine.Object.FindObjectsByType<SpatialPhotos.PhotoObject>(UnityEngine.FindObjectsSortMode.None);
+s.Append($"\ncapture: pinchActive={SpatialPhotos.HandPinchManager.IsProximityPinchActive} frameActive={frame.gameObject.activeSelf} library={lib.Entries.Count} photosInScene={photos.Length} photoHeld={SpatialPhotos.PhotoObject.AnyHeld} thumbHeld={SpatialPhotos.GalleryThumbnail.AnyHeld}");
 foreach (var p in photos) s.Append($"\n  photo at {p.transform.position:F2} {p.Entry.WidthM:F2}x{p.Entry.HeightM:F2} m layer={UnityEngine.LayerMask.LayerToName(p.gameObject.layer)}");
 
 string name = "__ARG1__";

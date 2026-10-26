@@ -9,8 +9,8 @@ UnityEngine.RenderTexture.active = rt;
 var img = new UnityEngine.Texture2D(src.width, src.height, UnityEngine.TextureFormat.RGB24, false);
 img.ReadPixels(new UnityEngine.Rect(0, 0, src.width, src.height), 0, 0);
 UnityEngine.RenderTexture.active = null; UnityEngine.RenderTexture.ReleaseTemporary(rt);
-var box = UnityEngine.Object.FindFirstObjectByType<ImageBoundaryBox>();
-var corners = (UnityEngine.Vector3[])typeof(ImageBoundaryBox).GetField("lastCorners", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).GetValue(box);
+var box = UnityEngine.Object.FindFirstObjectByType<SpatialPhotos.ImageBoundaryBox>();
+var corners = (UnityEngine.Vector3[])typeof(SpatialPhotos.ImageBoundaryBox).GetField("lastCorners", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).GetValue(box);
 var camPose = pca.GetCameraPose();
 UnityEngine.Vector2 min = UnityEngine.Vector2.positiveInfinity, max = UnityEngine.Vector2.negativeInfinity;
 foreach (var c in corners) { var v = pca.WorldToViewportPoint(c, camPose); min = UnityEngine.Vector2.Min(min, v); max = UnityEngine.Vector2.Max(max, v); }

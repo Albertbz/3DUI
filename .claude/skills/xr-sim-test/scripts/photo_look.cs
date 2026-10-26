@@ -2,7 +2,7 @@
 // Puts the first floating photo into a hover/grab state through its Grabbable (no movement), then saves a
 // close-up render of it from the head to __OUT__/shots/<name>.png and prints its outline state.
 // Render in a separate call after the event: the outline switches in the next Update.
-var photo = UnityEngine.Object.FindFirstObjectByType<PhotoObject>();
+var photo = UnityEngine.Object.FindFirstObjectByType<SpatialPhotos.PhotoObject>();
 if (photo == null) return "no photo in scene; run capture.sh first";
 if ("__ARG2__" != "")
 {
@@ -16,7 +16,7 @@ if ("__ARG2__" != "")
         case "clear": Send(Oculus.Interaction.PointerEventType.Unselect); Send(Oculus.Interaction.PointerEventType.Unhover); break;
     }
 }
-var o = photo.transform.Find("Outline").GetComponent<FrameOutline>();
+var o = photo.transform.Find("Outline").GetComponent<SpatialPhotos.FrameOutline>();
 var s = $"photo {photo.Entry.WidthM:F2}x{photo.Entry.HeightM:F2} m held={photo.IsHeld} | outline size={o.Size.x:F3}x{o.Size.y:F3} dashed={o.Dashed} activity={o.Activity:F2} appear={o.Appear:F2} layer={UnityEngine.LayerMask.LayerToName(o.gameObject.layer)}";
 
 var head = UnityEngine.GameObject.Find("[BuildingBlock] Camera Rig/TrackingSpace/CenterEyeAnchor").transform;

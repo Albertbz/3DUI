@@ -131,7 +131,7 @@ Always list what this can't cover:
 
 - **Change values in edit mode, not during Play mode.** Play-mode changes are lost. Stop Play mode first, then change the scene or prefab through the bridge with `Undo.RecordObject` + `EditorSceneManager.SaveScene`, or `PrefabUtility.LoadPrefabContents`/`SaveAsPrefabAsset` for prefabs.
 - **After a code change**, run `unity command script recompile`, wait until `recompile_status` is `completed`, check `console status` for `compilationFailed: false`, then run `connect.sh` again and repeat the failed steps.
-- **Keep the setup guide in sync.** Update `PHOTO_FEATURE_SETUP.md` when gallery layout values change.
+- **Keep the setup guide in sync.** Update `Assets/SpatialPhotos/README.md` when setup steps or tuning values change. The scene objects are instances of `Assets/SpatialPhotos/Prefabs/PhotoCaptureSystem` and `WristGallery`; change the prefab, not the instance.
 
 ## Gotchas (all hit in practice)
 

@@ -1,8 +1,8 @@
 // Renders a gallery sequence frame by frame from the head's view into __OUT__/video/:
 // palm turns toward the face (gallery scales in), pages right twice and left once, palm turns away.
 // Needs hook.cs installed. Rendering + PNG encoding is slow (~1-2 min for ~170 frames); wait with wait_log.sh.
-var lib = UnityEngine.Object.FindFirstObjectByType<PhotoLibrary>();
-var gallery = UnityEngine.Object.FindFirstObjectByType<WristGallery>();
+var lib = UnityEngine.Object.FindFirstObjectByType<SpatialPhotos.PhotoLibrary>();
+var gallery = UnityEngine.Object.FindFirstObjectByType<SpatialPhotos.WristGallery>();
 var visual = gallery.transform.Find("Visual");
 var headT = UnityEngine.GameObject.Find("[BuildingBlock] Camera Rig/TrackingSpace/CenterEyeAnchor").transform;
 var dir = "__OUT__/video/";
@@ -11,7 +11,7 @@ System.IO.Directory.CreateDirectory(dir);
 var d = System.AppDomain.CurrentDomain;
 var log = new System.Text.StringBuilder();
 d.SetData("xrsim.log", log); d.SetData("xrsim.done", null);
-foreach (var p in UnityEngine.Object.FindObjectsByType<PhotoObject>(UnityEngine.FindObjectsSortMode.None)) UnityEngine.Object.Destroy(p.gameObject);
+foreach (var p in UnityEngine.Object.FindObjectsByType<SpatialPhotos.PhotoObject>(UnityEngine.FindObjectsSortMode.None)) UnityEngine.Object.Destroy(p.gameObject);
 
 var go = new UnityEngine.GameObject("TempVideoCam") { hideFlags = UnityEngine.HideFlags.HideAndDontSave };
 var cam = go.AddComponent<UnityEngine.Camera>();

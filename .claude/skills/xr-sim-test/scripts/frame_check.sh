@@ -27,7 +27,7 @@ echo "== resize sweep"; ev frame_check.cs >/dev/null; "$DIR/wait_log.sh" 60
 ev hand.cs right release >/dev/null; sleep 0.8
 echo "== released under the minimum size (expect frameActive=False, library unchanged, hum stopped)"
 ev state.cs | sed -n 2p
-~/.unity/bin/unity command script eval --no-banner --code 'var f = UnityEngine.Object.FindFirstObjectByType<BoundaryFramePrefab>(UnityEngine.FindObjectsInactive.Include); var a = f.GetComponents<UnityEngine.AudioSource>(); return "audio sources playing=" + System.Linq.Enumerable.Count(a, s => s.isPlaying);' 2>&1 | grep -o "audio sources playing=[0-9]*" | head -1
+~/.unity/bin/unity command script eval --no-banner --code 'var f = UnityEngine.Object.FindFirstObjectByType<SpatialPhotos.CaptureFrameVisual>(UnityEngine.FindObjectsInactive.Include); var a = f.GetComponents<UnityEngine.AudioSource>(); return "audio sources playing=" + System.Linq.Enumerable.Count(a, s => s.isPlaying);' 2>&1 | grep -o "audio sources playing=[0-9]*" | head -1
 ev hand.cs left release >/dev/null; sleep 0.3
 ev hand.cs left live >/dev/null; ev hand.cs right live >/dev/null
 echo "hands back on live tracking"

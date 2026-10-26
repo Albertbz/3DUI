@@ -1,8 +1,8 @@
 // Grab test on the first photo in the scene, driven through its Grabbable over several frames:
 // a slow 15 cm drag and release (should stay floating), then a ~3 m/s throw (should fall, fade, be destroyed).
 // Runs as a coroutine; read the result with wait_log.sh.
-var photo = UnityEngine.Object.FindFirstObjectByType<PhotoObject>();
-var runner = UnityEngine.Object.FindFirstObjectByType<PhotoLibrary>();
+var photo = UnityEngine.Object.FindFirstObjectByType<SpatialPhotos.PhotoObject>();
+var runner = UnityEngine.Object.FindFirstObjectByType<SpatialPhotos.PhotoLibrary>();
 var log = new System.Text.StringBuilder();
 var d = System.AppDomain.CurrentDomain;
 d.SetData("xrsim.log", log); d.SetData("xrsim.done", null);
@@ -23,7 +23,7 @@ System.Collections.IEnumerator Run()
     Send(101, Oculus.Interaction.PointerEventType.Hover, pose);
     Send(101, Oculus.Interaction.PointerEventType.Select, pose);
     yield return null;
-    log.AppendLine($"slow: after select IsHeld={photo.IsHeld} AnyHeld={PhotoObject.AnyHeld} (expect True True)");
+    log.AppendLine($"slow: after select IsHeld={photo.IsHeld} AnyHeld={SpatialPhotos.PhotoObject.AnyHeld} (expect True True)");
     for (int i = 1; i <= 30; i++)
     {
         pose.position = start + new UnityEngine.Vector3(0.005f * i, -0.002f * i, -0.002f * i);

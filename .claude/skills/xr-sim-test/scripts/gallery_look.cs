@@ -2,9 +2,9 @@
 // Puts a gallery thumbnail into a hover/grab state through its Grabbable (no movement), then saves a
 // close-up render of the wrist gallery to __OUT__/shots/<name>.png and prints the outline states.
 // 'clear' sends Unselect/Unhover for whatever an earlier call left on that thumbnail.
-var g = UnityEngine.Object.FindFirstObjectByType<WristGallery>();
+var g = UnityEngine.Object.FindFirstObjectByType<SpatialPhotos.WristGallery>();
 var v = g.transform.Find("Visual");
-var thumbs = v.GetComponentsInChildren<GalleryThumbnail>();
+var thumbs = v.GetComponentsInChildren<SpatialPhotos.GalleryThumbnail>();
 int index = "__ARG3__" == "" ? 0 : int.Parse("__ARG3__");
 var s = new System.Text.StringBuilder();
 if ("__ARG2__" != "" && index < thumbs.Length)
@@ -19,7 +19,7 @@ if ("__ARG2__" != "" && index < thumbs.Length)
         case "clear": Send(Oculus.Interaction.PointerEventType.Unselect); Send(Oculus.Interaction.PointerEventType.Unhover); break;
     }
 }
-foreach (var o in v.GetComponentsInChildren<FrameOutline>())
+foreach (var o in v.GetComponentsInChildren<SpatialPhotos.FrameOutline>())
     s.AppendLine($"{o.transform.parent.name}/{o.name}: size={o.Size.x:F3}x{o.Size.y:F3} dashed={o.Dashed} activity={o.Activity:F2} layer={UnityEngine.LayerMask.LayerToName(o.gameObject.layer)}");
 foreach (var b in v.GetComponentsInChildren<UnityEngine.Transform>()) if (b.name == "Button") s.AppendLine($"{b.parent.name}/Button renderer enabled={b.GetComponent<UnityEngine.Renderer>().enabled}");
 

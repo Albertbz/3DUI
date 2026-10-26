@@ -1,8 +1,8 @@
 // Gallery interaction test (needs the gallery visible: pose.cs face, and >= Visible Slots + 2 photos):
 // layout, thumbnail short pull / long pull, swipe toward the viewer's left, and the two arrows.
 // Runs as a coroutine; read the result with wait_log.sh.
-var gallery = UnityEngine.Object.FindFirstObjectByType<WristGallery>();
-var lib = UnityEngine.Object.FindFirstObjectByType<PhotoLibrary>();
+var gallery = UnityEngine.Object.FindFirstObjectByType<SpatialPhotos.WristGallery>();
+var lib = UnityEngine.Object.FindFirstObjectByType<SpatialPhotos.PhotoLibrary>();
 var visual = gallery.transform.Find("Visual");
 var strip = visual.Find("Strip");
 var head = UnityEngine.GameObject.Find("[BuildingBlock] Camera Rig/TrackingSpace/CenterEyeAnchor").transform;
@@ -11,9 +11,9 @@ var d = System.AppDomain.CurrentDomain;
 d.SetData("xrsim.log", log); d.SetData("xrsim.done", null);
 if (!visual.gameObject.activeSelf) { log.AppendLine("gallery is not visible; run pose.cs face first"); d.SetData("xrsim.done", true); return "gallery hidden"; }
 
-System.Func<int, GalleryThumbnail> slotThumb = i => strip.GetChild(i).GetComponentInChildren<GalleryThumbnail>(true);
+System.Func<int, SpatialPhotos.GalleryThumbnail> slotThumb = i => strip.GetChild(i).GetComponentInChildren<SpatialPhotos.GalleryThumbnail>(true);
 System.Func<int> firstShown = () => { var e = slotThumb(0).Entry; for (int i = 0; i < lib.Entries.Count; i++) if (lib.Entries[i] == e) return i; return -1; };
-System.Func<int> photoCount = () => UnityEngine.Object.FindObjectsByType<PhotoObject>(UnityEngine.FindObjectsSortMode.None).Length;
+System.Func<int> photoCount = () => UnityEngine.Object.FindObjectsByType<SpatialPhotos.PhotoObject>(UnityEngine.FindObjectsSortMode.None).Length;
 float Side(UnityEngine.Vector3 p) => UnityEngine.Vector3.Dot(p - visual.position, head.right);
 
 var gso = new UnityEditor.SerializedObject(gallery);
@@ -51,20 +51,20 @@ System.Collections.IEnumerator Run()
     int before = photoCount();
 
     yield return Drag(grab, 201, slotPos, slotPos + toHead * 0.05f, 10, () =>
-        log.AppendLine($"short pull: held={GalleryThumbnail.AnyHeld} galleryVisible={visual.gameObject.activeSelf} spawned={photoCount() - before} (expect True True 0)"));
+        log.AppendLine($"short pull: held={SpatialPhotos.GalleryThumbnail.AnyHeld} galleryVisible={visual.gameObject.activeSelf} spawned={photoCount() - before} (expect True True 0)"));
     yield return new UnityEngine.WaitForSeconds(0.6f);
     log.AppendLine($"short pull released: back in slot={thumb.transform.localPosition.magnitude < 0.002f} (expect True)");
 
     yield return Drag(grab, 202, slotPos, slotPos + toHead * 0.2f + head.right * 0.1f, 25, () =>
     {
-        foreach (var ph in UnityEngine.Object.FindObjectsByType<PhotoObject>(UnityEngine.FindObjectsSortMode.None))
+        foreach (var ph in UnityEngine.Object.FindObjectsByType<SpatialPhotos.PhotoObject>(UnityEngine.FindObjectsSortMode.None))
         {
             var tex = ph.GetComponentInChildren<UnityEngine.Renderer>().material.mainTexture;
             log.AppendLine($"long pull: photo spawned held={ph.IsHeld} followsThumb={UnityEngine.Vector3.Distance(ph.transform.position, thumb.transform.position) < 0.01f} texture={tex.width}x{tex.height} thumbHidden={!thumb.GetComponentInChildren<UnityEngine.Renderer>().enabled} galleryVisible={visual.gameObject.activeSelf} (expect True True full-res True True)");
         }
     });
     yield return new UnityEngine.WaitForSeconds(0.6f);
-    var after = UnityEngine.Object.FindObjectsByType<PhotoObject>(UnityEngine.FindObjectsSortMode.None);
+    var after = UnityEngine.Object.FindObjectsByType<SpatialPhotos.PhotoObject>(UnityEngine.FindObjectsSortMode.None);
     log.AppendLine($"long pull released: photos={after.Length - before} floating={(after.Length > 0 && !after[0].IsHeld && after[0].GetComponent<UnityEngine.Rigidbody>().isKinematic)} thumbBackInSlot={thumb.transform.localPosition.magnitude < 0.002f} thumbVisible={thumb.GetComponentInChildren<UnityEngine.Renderer>().enabled} (expect 1 True True True)");
     foreach (var ph in after) UnityEngine.Object.Destroy(ph.gameObject);
 
