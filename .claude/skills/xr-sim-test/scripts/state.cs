@@ -7,14 +7,18 @@ var g = UnityEngine.Object.FindFirstObjectByType<SpatialPhotos.WristGallery>();
 var v = g.transform.Find("Visual");
 var gso = new UnityEditor.SerializedObject(g);
 var palmLocal = gso.FindProperty("palmNormalLocal").vector3Value;
-var dot = UnityEngine.Vector3.Dot(lA.TransformDirection(palmLocal).normalized, (head.position - lA.position).normalized);
+var dot = UnityEngine.Vector3.Dot(lA.TransformDirection(palmLocal).normalized, UnityEngine.Vector3.up);
+// The gallery floats above the tracked palm joint (the pose override moves the anchor, not the joints)
+var palmCenter = lA.TransformPoint(gso.FindProperty("palmCenterLocal").vector3Value);
+foreach (var h in UnityEngine.Object.FindObjectsByType<Oculus.Interaction.Input.Hand>(UnityEngine.FindObjectsSortMode.None))
+    if (!(h is Oculus.Interaction.Input.SyntheticHand) && h.Handedness == Oculus.Interaction.Input.Handedness.Left && h.GetJointPose(Oculus.Interaction.Input.HandJointId.HandPalm, out var pj)) { palmCenter = pj.position; break; }
 var s = new System.Text.StringBuilder();
-s.Append($"gallery: palm·toHead={dot:F2} visible={v.gameObject.activeSelf} scale={v.localScale.x:F2}");
+s.Append($"gallery: palm·up={dot:F2} visible={v.gameObject.activeSelf} scale={v.localScale.x:F2}");
 if (v.gameObject.activeSelf)
 {
     var toView = (head.position - v.position).normalized;
     var l = v.Find("LeftArrow"); var r = v.Find("RightArrow");
-    s.Append($" facesViewer={UnityEngine.Vector3.Dot(-v.forward, toView):F2} upright={UnityEngine.Vector3.Dot(v.up, head.up):F2} notMirrored={UnityEngine.Vector3.Dot(v.right, head.right):F2} dist={UnityEngine.Vector3.Distance(v.position, head.position):F2}m");
+    s.Append($" facesViewer={UnityEngine.Vector3.Dot(-v.forward, toView):F2} upright={UnityEngine.Vector3.Dot(v.up, head.up):F2} notMirrored={UnityEngine.Vector3.Dot(v.right, head.right):F2} dist={UnityEngine.Vector3.Distance(v.position, head.position):F2}m abovePalm={v.position.y - palmCenter.y:F3}m offCentre={UnityEngine.Vector3.ProjectOnPlane(v.position - palmCenter, UnityEngine.Vector3.up).magnitude:F3}m");
     if (l != null && r != null) s.Append($" width={UnityEngine.Vector3.Angle(l.position - head.position, r.position - head.position):F0}°");
 }
 var frame = UnityEngine.Object.FindFirstObjectByType<SpatialPhotos.CaptureFrameVisual>(UnityEngine.FindObjectsInactive.Include);

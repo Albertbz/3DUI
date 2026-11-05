@@ -1,19 +1,20 @@
 using System.Collections.Generic;
 using Oculus.Interaction;
+using Oculus.Interaction.Input;
 using UnityEngine;
 
 namespace SpatialPhotos
 {
     /// <summary>
-    /// Strip of photo thumbnails on the left wrist that appears when the palm faces the head.
-    /// Drop the WristGallery prefab anywhere in the scene: at startup it attaches itself to the
-    /// OVRCameraRig's left hand anchor and finds the hand, head and photo library.
+    /// Strip of photo thumbnails that floats above the left hand when the palm opens upward, turned toward the
+    /// eyes and kept upright. Drop the WristGallery prefab anywhere in the scene: at startup it finds the
+    /// OVRCameraRig's left hand anchor, hand, head and the photo library.
     /// </summary>
     public class WristGallery : MonoBehaviour
     {
         [Header("References (found at startup when empty)")]
         [SerializeField] private OVRHand leftHand;
-        [SerializeField] private Transform wrist;             // LeftHandAnchor; the gallery attaches itself to it
+        [SerializeField] private Transform wrist;             // LeftHandAnchor; the gallery floats above it
         [SerializeField] private Transform head;              // CenterEyeAnchor
         [SerializeField] private Transform visualRoot;        // Scaled in/out when shown/hidden
         [SerializeField] private Transform stripRoot;         // Parent of the thumbnail slots
@@ -43,13 +44,23 @@ namespace SpatialPhotos
         [SerializeField] private float confirmGap = 0.008f;      // Between the gallery panel and the popup
         [SerializeField] private float labelHeight = 0.006f;
 
-        [Header("Palm-up detection")]
+        [Header("Placement above the palm")]
+        [Tooltip("Interaction SDK hand whose palm joint the gallery floats above; the rig's left hand when empty")]
+        [SerializeField, Interface(typeof(IHand))] private Object palmHand;
+        [Tooltip("Palm centre in the wrist transform's local space, used only while there is no hand joint data")]
+        [SerializeField] private Vector3 palmCenterLocal = new Vector3(0f, 0f, 0.06f);
+        [SerializeField] private float heightAbovePalm = 0.12f;     // To the middle of the thumbnail strip
+        [SerializeField] private float followSmoothing = 25f;      // Higher follows the hand more tightly
+
+        [Header("Open-palm detection")]
         [Tooltip("Palm normal in the wrist transform's local space. Tune this in play mode if the gallery shows on the wrong side.")]
         [SerializeField] private Vector3 palmNormalLocal = Vector3.down;
+        [Tooltip("How far the palm must face up (dot with world up) to show the gallery, and below which it hides again")]
         [SerializeField] private float showThreshold = 0.7f;
         [SerializeField] private float hideThreshold = 0.5f;
         [SerializeField] private float scaleSpeed = 1f / 0.15f;
 
+        private IHand palm;
         private readonly List<GalleryThumbnail> thumbnails = new List<GalleryThumbnail>();
         private int firstIndex;
         private float scrollPosition; // In slots: 1.5 means halfway between the 2nd and 3rd photo at the left edge
@@ -108,13 +119,57 @@ namespace SpatialPhotos
                 return;
             }
 
-            // Follow the wrist; the gallery's own offset from the palm lives on its Visual child
-            if (transform.parent != wrist)
+            // Placed in world space every frame, so it stays upright however the hand is turned
+            transform.SetParent(null, true);
+        }
+
+        private void LateUpdate()
+        {
+            if (wrist == null || head == null)
             {
-                transform.SetParent(wrist, false);
-                transform.localPosition = Vector3.zero;
-                transform.localRotation = Quaternion.identity;
+                return;
             }
+
+            // Above the palm centre, facing the eyes; visualRoot's -Z is the side people look at
+            Vector3 target = PalmCenter() + Vector3.up * heightAbovePalm;
+            Vector3 toGallery = Vector3.ProjectOnPlane(target - head.position, Vector3.up).sqrMagnitude > 1e-6f
+                ? target - head.position
+                : head.forward;
+            Quaternion rotation = Quaternion.LookRotation(toGallery, Vector3.up);
+
+            // Snap into place when appearing, then follow smoothly to hide tracking jitter
+            if (visibility <= 0f)
+            {
+                transform.SetPositionAndRotation(target, rotation);
+                return;
+            }
+            float t = 1f - Mathf.Exp(-followSmoothing * Time.deltaTime);
+            transform.SetPositionAndRotation(
+                Vector3.Lerp(transform.position, target, t), Quaternion.Slerp(transform.rotation, rotation, t));
+        }
+
+        // The tracked palm joint, so the gallery sits over the middle of the hand whatever the anchor's origin is
+        private Vector3 PalmCenter()
+        {
+            palm ??= palmHand as IHand ?? FindLeftHand();
+            if (palm != null && palm.GetJointPose(HandJointId.HandPalm, out Pose palmPose))
+            {
+                return palmPose.position;
+            }
+            return wrist.TransformPoint(palmCenterLocal);
+        }
+
+        // A tracked hand, not a synthetic one: those are pinned to whatever the hand is grabbing
+        private static IHand FindLeftHand()
+        {
+            foreach (Hand hand in FindObjectsByType<Hand>(FindObjectsSortMode.None))
+            {
+                if (!(hand is SyntheticHand) && hand.IsTrackedDataValid && hand.Handedness == Handedness.Left)
+                {
+                    return hand;
+                }
+            }
+            return null;
         }
 
         private void OnEnable()
@@ -175,9 +230,9 @@ namespace SpatialPhotos
                 return;
             }
 
+            // An open palm facing up, as if holding the gallery
             Vector3 palmNormal = wrist.TransformDirection(palmNormalLocal).normalized;
-            Vector3 toHead = (head.position - wrist.position).normalized;
-            float facing = Vector3.Dot(palmNormal, toHead);
+            float facing = Vector3.Dot(palmNormal, Vector3.up);
 
             if (!shown && facing > showThreshold)
             {

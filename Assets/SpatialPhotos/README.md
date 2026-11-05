@@ -1,6 +1,6 @@
 # Spatial Photos
 
-Pinch with both hands and pull them apart to draw a frame. Release to take a photo of what's inside, both the real room (passthrough camera) and virtual content. Photos float where they were taken; grab them, move them, or throw them away. Grab one with both hands and move your hands apart or together to resize it. A gallery on your left wrist shows saved photos when you turn your palm toward you, and you can pull a photo out of it. Poke the × in a thumbnail's corner to delete it: a popup above the gallery asks you to confirm or cancel.
+Pinch with both hands and pull them apart to draw a frame. Release to take a photo of what's inside, both the real room (passthrough camera) and virtual content. Photos float where they were taken; grab them, move them, or throw them away. Grab one with both hands and move your hands apart or together to resize it. Open your left palm facing up and a gallery of saved photos floats above your hand, turned toward you; you can pull a photo out of it. Poke the × in a thumbnail's corner to delete it: a popup above the gallery asks you to confirm or cancel.
 
 Everything lives in this folder. To use it in another project, copy the `SpatialPhotos` folder into `Assets/` and follow the setup below.
 
@@ -22,7 +22,7 @@ Everything lives in this folder. To use it in another project, copy the `Spatial
 3. **Put the hand visuals on `CaptureIgnore`** so your hands don't show up in photos. Usually this means the hand tracking objects and the interaction rig's hand visuals.
 4. **Drag in the prefabs** from `Prefabs/`, anywhere in the hierarchy:
    - `PhotoCaptureSystem`: the pinch frame, capture and photo library
-   - `WristGallery` (optional): attaches itself to the left hand anchor at startup
+   - `WristGallery` (optional): floats above the left hand anchor at runtime
 5. **Android permission:** add `horizonos.permission.HEADSET_CAMERA` to `AndroidManifest.xml`. `PhotoCapture` requests it at startup.
 
 That's all the wiring needed. Scene references left empty in the Inspector are found at startup: hands, head, wrist, passthrough camera and photo library. They are looked up through the scene's `OVRCameraRig`, and a warning is logged for anything missing. Assign a field yourself to override the lookup.
@@ -51,7 +51,9 @@ All scripts are in the `SpatialPhotos` namespace and the `SpatialPhotos` assembl
 - **Photo resize:** `Photo` prefab → `PhotoObject` → Min Height and Max Height limit how small or large a two-hand grab can make a photo.
 - **Gallery:** `WristGallery` → Visible Slots, Slot Spacing, show/hide thresholds, Scroll Smoothing (how fast the strip settles after a swipe or arrow press).
   - **Deleting:** `WristGallery` → Confirm Button Size, Confirm Gap and Label Height for the popup; `GalleryThumbnail` → Delete Button Size and Inset for the corner ×. Deleting removes the PNG and JSON; photos already floating in the room stay until thrown away.
-  - **Palm Normal Local:** the default (0, −1, 0) matches Meta's hand anchors; change it if the gallery shows on the wrong side of the hand.
-  - **Visual:** the child `Visual` holds the gallery's offset from the palm. Scale `WristGallery`, not `Visual`, because `Visual`'s scale is animated.
+  - **Placement:** the gallery floats above the tracked palm joint of the left Interaction SDK hand (found automatically, or set Palm Hand), Height Above Palm (12 cm by default) to the middle of the strip, with Follow Smoothing. Palm Center Local is only a fallback while there is no hand joint data. The gallery turns to face your eyes and stays upright however the hand is turned.
+  - **Showing:** the gallery appears when the palm faces up (palm normal · world up above Show Threshold 0.7) and hides below Hide Threshold 0.5.
+  - **Palm Normal Local:** the default (0, −1, 0) matches Meta's hand anchors; change it if the gallery shows with the palm facing down.
+  - **Visual:** scale `WristGallery`, not its child `Visual`, because `Visual`'s scale is animated.
 
 Photos are saved as PNG + JSON in `Application.persistentDataPath/Photos`.

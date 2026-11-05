@@ -1,5 +1,5 @@
 // delete_photo.cs [popup|cancel|confirm] [thumbnail index]
-// Deleting from the wrist gallery (needs the gallery visible: pose.cs face).
+// Deleting from the wrist gallery (needs the gallery visible: pose.cs palm).
 //   popup   pokes the thumbnail's corner cross: the confirmation pops up above it, the thumbnail turns red
 //   cancel  pokes Cancel: the popup closes and nothing is deleted
 //   confirm pokes Confirm: the photo leaves the library and its PNG + JSON leave the disk

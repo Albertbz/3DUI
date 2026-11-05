@@ -1,4 +1,4 @@
-// smooth_scroll.cs: the strip follows the finger while dragging the swipe surface (needs pose.cs face and
+// smooth_scroll.cs: the strip follows the finger while dragging the swipe surface (needs pose.cs palm and
 // >= Visible Slots + 2 photos). Drags part of a slot and samples the slots every frame, then checks that the
 // strip settles on the nearest photo after release. Runs as a coroutine; read the result with wait_log.sh.
 var gallery = UnityEngine.Object.FindFirstObjectByType<SpatialPhotos.WristGallery>();

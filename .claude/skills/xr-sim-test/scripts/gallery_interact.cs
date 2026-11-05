@@ -1,4 +1,4 @@
-// Gallery interaction test (needs the gallery visible: pose.cs face, and >= Visible Slots + 2 photos):
+// Gallery interaction test (needs the gallery visible: pose.cs palm, and >= Visible Slots + 2 photos):
 // layout, thumbnail short pull / long pull, swipe toward the viewer's left, and the two arrows.
 // Runs as a coroutine; read the result with wait_log.sh.
 var gallery = UnityEngine.Object.FindFirstObjectByType<SpatialPhotos.WristGallery>();
@@ -9,7 +9,7 @@ var head = UnityEngine.GameObject.Find("[BuildingBlock] Camera Rig/TrackingSpace
 var log = new System.Text.StringBuilder();
 var d = System.AppDomain.CurrentDomain;
 d.SetData("xrsim.log", log); d.SetData("xrsim.done", null);
-if (!visual.gameObject.activeSelf) { log.AppendLine("gallery is not visible; run pose.cs face first"); d.SetData("xrsim.done", true); return "gallery hidden"; }
+if (!visual.gameObject.activeSelf) { log.AppendLine("gallery is not visible; run pose.cs palm first"); d.SetData("xrsim.done", true); return "gallery hidden"; }
 
 System.Func<int, SpatialPhotos.GalleryThumbnail> slotThumb = i => strip.GetChild(i).GetComponentInChildren<SpatialPhotos.GalleryThumbnail>(true);
 System.Func<int> firstShown = () => { var e = slotThumb(0).Entry; for (int i = 0; i < lib.Entries.Count; i++) if (lib.Entries[i] == e) return i; return -1; };
