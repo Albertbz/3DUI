@@ -1,5 +1,6 @@
 using System.Collections;
 using Oculus.Interaction;
+using Oculus.Interaction.HandGrab;
 using UnityEngine;
 
 namespace SpatialPhotos
@@ -45,6 +46,8 @@ namespace SpatialPhotos
         private bool dismissing;
         private FrameOutline outline;
         private int hoverCount;
+        private HandGrabInteractable[] handGrabInteractables;
+        private HandAlignType handAlignment;
 
         // Recent positions while held, used to estimate release velocity
         private const int VelocitySamples = 5;
@@ -79,6 +82,9 @@ namespace SpatialPhotos
                 resize.MaxHeight = maxHeight;
                 grab.InjectOptionalTwoGrabTransformer(resize);
             }
+
+            handGrabInteractables = GetComponentsInChildren<HandGrabInteractable>(true);
+            handAlignment = handGrabInteractables.Length > 0 ? handGrabInteractables[0].HandAlignment : HandAlignType.None;
         }
 
         private void OnEnable()
@@ -206,6 +212,14 @@ namespace SpatialPhotos
             }
             IsHeld = held;
             heldCount += held ? 1 : -1;
+
+            // The first hand's visual locks onto the photo as usual. A hand that joins while the photo is held,
+            // and the first hand when it does, is left free: resizing changes the photo but not its transform's
+            // scale, so a visual hand locked at a fixed offset from it would drift away from the real hand
+            foreach (HandGrabInteractable interactable in handGrabInteractables)
+            {
+                interactable.HandAlignment = held ? HandAlignType.None : handAlignment;
+            }
         }
 
         private void Update()

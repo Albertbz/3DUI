@@ -1,6 +1,6 @@
 ---
 name: xr-sim-test
-description: Test this project's photo capture and wrist gallery without a headset, by running Play mode in the Meta XR Simulator and scripting hand poses, pinches, grabs and pokes from the Unity CLI. Use when asked to test, verify or check the wrist gallery, photo capture, pinch frame, grabbing or poking in the simulator, or after changing WristGallery, GalleryThumbnail, PokeButton, PhotoObject, PhotoResizeTransformer, PhotoCapture, PhotoLibrary, HandPinchManager or ImageBoundaryBox.
+description: Test this project's photo capture and wrist gallery without a headset, by running Play mode in the Meta XR Simulator and scripting hand poses, pinches, grabs and pokes from the Unity CLI. Use when asked to test, verify or check the wrist gallery, photo capture, pinch frame, grabbing or poking in the simulator, or after changing WristGallery, GalleryThumbnail, PokeButton, PhotoObject, PhotoResizeTransformer, hand grab alignment, PhotoCapture, PhotoLibrary, HandPinchManager or ImageBoundaryBox.
 ---
 
 # Testing the photo feature in the Meta XR Simulator
@@ -101,6 +101,12 @@ Render in a separate call after the event: the outline switches in the next `Upd
 ```
 
 Hands should stay on the same spots of the photo, the transform scale stays 1 and the outline keeps its thickness.
+
+```bash
+./ev.sh resize_hands.cs && ./wait_log.sh   # real HandGrabInteractors: visual hands stay free during a two-hand grab
+```
+
+`resize_hands.cs` force-selects the photo with both `HandGrabInteractor`s. The simulator's tracked hands can't be moved from code, so it turns the photo inside the grab instead and measures how far each visual (synthetic) wrist ends up from the tracked wrist: 0 mm with the fix. The control run puts back `AlignOnGrab` and shows the visual wrists swinging ~13 cm away with the photo.
 
 **4. Gallery interactions.**
 
