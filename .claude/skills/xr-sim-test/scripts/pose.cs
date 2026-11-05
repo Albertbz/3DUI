@@ -1,12 +1,23 @@
-// pose.cs <face|tray|off> [tilt degrees]
-// face: left palm toward the eyes, fingers up, ~35 cm away. tray: palm up below the head, fingers forward.
-// tilt rotates the palm away from the head around the finger axis (0 = facing straight at it).
+// pose.cs <palm|face|tray|off> [tilt degrees]
+// palm: open left palm facing up at chest height in front of you, fingers forward (shows the gallery above it).
+// face: left palm toward the eyes, fingers up, ~35 cm away. tray: palm up further down, fingers forward.
+// tilt rotates the palm around the finger axis, away from up for palm (0 = flat) and from the head for face.
 var head = UnityEngine.GameObject.Find("[BuildingBlock] Camera Rig/TrackingSpace/CenterEyeAnchor").transform;
 string pose = "__ARG1__";
 float tilt = float.TryParse("__ARG2__", out var t) ? t : 0f;
 var d = System.AppDomain.CurrentDomain;
 if (pose == "off" || pose == "") { d.SetData("lh.pos", null); d.SetData("lh.rot", null); return "override off"; }
 UnityEngine.Vector3 pos, fingers;
+if (pose == "palm")
+{
+    var flat = UnityEngine.Vector3.ProjectOnPlane(head.forward, UnityEngine.Vector3.up).normalized;
+    var at = head.position + flat * 0.32f - UnityEngine.Vector3.Cross(UnityEngine.Vector3.up, flat) * 0.1f - UnityEngine.Vector3.up * 0.32f;
+    // Hand anchor: -Y = palm normal, +Z = fingers
+    var flatRot = UnityEngine.Quaternion.LookRotation(flat, UnityEngine.Vector3.down);
+    flatRot = UnityEngine.Quaternion.AngleAxis(tilt, flatRot * UnityEngine.Vector3.forward) * flatRot;
+    d.SetData("lh.pos", at); d.SetData("lh.rot", flatRot);
+    return $"pose palm tilt {tilt}: palm·up={UnityEngine.Vector3.Dot(flatRot * UnityEngine.Vector3.down, UnityEngine.Vector3.up):F2}";
+}
 if (pose == "face") { pos = head.position + head.forward * 0.35f - head.right * 0.08f - head.up * 0.12f; fingers = UnityEngine.Vector3.up; }
 else { pos = head.position + head.forward * 0.38f - head.right * 0.12f - head.up * 0.4f; fingers = head.forward; }
 var toHead = (head.position - pos).normalized;

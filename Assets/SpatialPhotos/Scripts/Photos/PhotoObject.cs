@@ -1,5 +1,6 @@
 using System.Collections;
 using Oculus.Interaction;
+using Oculus.Interaction.HandGrab;
 using UnityEngine;
 
 namespace SpatialPhotos
@@ -24,6 +25,10 @@ namespace SpatialPhotos
         [SerializeField] private float dismissDuration = 1.5f;
         [SerializeField] private float destroyBelowY = -2f;
 
+        [Header("Two-hand resize (grab with both hands, move them apart or together)")]
+        [SerializeField] private float minHeight = 0.05f;
+        [SerializeField] private float maxHeight = 1.5f;
+
         private static readonly int FlashAmountId = Shader.PropertyToID("_FlashAmount");
         private static readonly int AlphaId = Shader.PropertyToID("_Alpha");
         private static readonly int MainTexId = Shader.PropertyToID("_MainTex");
@@ -33,6 +38,7 @@ namespace SpatialPhotos
 
         public PhotoEntry Entry { get; private set; }
         public bool IsHeld { get; private set; }
+        public Vector2 Size => size;
 
         private Material material;
         private Texture ownedTexture;
@@ -40,6 +46,8 @@ namespace SpatialPhotos
         private bool dismissing;
         private FrameOutline outline;
         private int hoverCount;
+        private HandGrabInteractable[] handGrabInteractables;
+        private HandAlignType handAlignment;
 
         // Recent positions while held, used to estimate release velocity
         private const int VelocitySamples = 5;
@@ -64,6 +72,19 @@ namespace SpatialPhotos
             outline.Padding = 0.015f;
             outline.DashLength = 0.015f;
             outline.Dashed = false;
+
+            // One hand moves and turns the photo; two hands also resize it
+            if (grabbable is Grabbable grab)
+            {
+                grab.InjectOptionalOneGrabTransformer(gameObject.AddComponent<GrabFreeTransformer>());
+                var resize = gameObject.AddComponent<PhotoResizeTransformer>();
+                resize.MinHeight = minHeight;
+                resize.MaxHeight = maxHeight;
+                grab.InjectOptionalTwoGrabTransformer(resize);
+            }
+
+            handGrabInteractables = GetComponentsInChildren<HandGrabInteractable>(true);
+            handAlignment = handGrabInteractables.Length > 0 ? handGrabInteractables[0].HandAlignment : HandAlignType.None;
         }
 
         private void OnEnable()
@@ -117,6 +138,12 @@ namespace SpatialPhotos
         public void GrowFrom(Vector2 startSize)
         {
             StartCoroutine(GrowRoutine(startSize, new Vector2(Entry.WidthM, Entry.HeightM)));
+        }
+
+        /// <summary>Changes the photo's size in the room; the outline keeps its stroke width.</summary>
+        public void Resize(Vector2 newSize)
+        {
+            SetSize(newSize);
         }
 
         private void SetSize(Vector2 newSize)
@@ -185,6 +212,14 @@ namespace SpatialPhotos
             }
             IsHeld = held;
             heldCount += held ? 1 : -1;
+
+            // The first hand's visual locks onto the photo as usual. A hand that joins while the photo is held,
+            // and the first hand when it does, is left free: resizing changes the photo but not its transform's
+            // scale, so a visual hand locked at a fixed offset from it would drift away from the real hand
+            foreach (HandGrabInteractable interactable in handGrabInteractables)
+            {
+                interactable.HandAlignment = held ? HandAlignType.None : handAlignment;
+            }
         }
 
         private void Update()

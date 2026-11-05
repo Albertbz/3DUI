@@ -1,4 +1,4 @@
-// Gallery interaction test (needs the gallery visible: pose.cs face, and >= Visible Slots + 2 photos):
+// Gallery interaction test (needs the gallery visible: pose.cs palm, and >= Visible Slots + 2 photos):
 // layout, thumbnail short pull / long pull, swipe toward the viewer's left, and the two arrows.
 // Runs as a coroutine; read the result with wait_log.sh.
 var gallery = UnityEngine.Object.FindFirstObjectByType<SpatialPhotos.WristGallery>();
@@ -9,7 +9,7 @@ var head = UnityEngine.GameObject.Find("[BuildingBlock] Camera Rig/TrackingSpace
 var log = new System.Text.StringBuilder();
 var d = System.AppDomain.CurrentDomain;
 d.SetData("xrsim.log", log); d.SetData("xrsim.done", null);
-if (!visual.gameObject.activeSelf) { log.AppendLine("gallery is not visible; run pose.cs face first"); d.SetData("xrsim.done", true); return "gallery hidden"; }
+if (!visual.gameObject.activeSelf) { log.AppendLine("gallery is not visible; run pose.cs palm first"); d.SetData("xrsim.done", true); return "gallery hidden"; }
 
 System.Func<int, SpatialPhotos.GalleryThumbnail> slotThumb = i => strip.GetChild(i).GetComponentInChildren<SpatialPhotos.GalleryThumbnail>(true);
 System.Func<int> firstShown = () => { var e = slotThumb(0).Entry; for (int i = 0; i < lib.Entries.Count; i++) if (lib.Entries[i] == e) return i; return -1; };
@@ -79,6 +79,7 @@ System.Collections.IEnumerator Run()
     for (int i = 1; i <= 10; i++) { pose.position = UnityEngine.Vector3.Lerp(a, b, i / 10f); Poke(swipe, 401, pose, Oculus.Interaction.PointerEventType.Move); yield return null; }
     Poke(swipe, 401, pose, Oculus.Interaction.PointerEventType.Unselect);
     Poke(swipe, 401, pose, Oculus.Interaction.PointerEventType.Unhover);
+    yield return new UnityEngine.WaitForSeconds(0.6f); // Settles on the nearest photo
     log.AppendLine($"swipe left: first shown {was} -> {firstShown()} (expect it to increase = older)");
 
     foreach (var (name, expect) in new[] { ("LeftArrow", -1), ("RightArrow", 1) })
@@ -89,7 +90,7 @@ System.Collections.IEnumerator Run()
         int w = firstShown();
         foreach (var t in new[] { Oculus.Interaction.PointerEventType.Hover, Oculus.Interaction.PointerEventType.Select, Oculus.Interaction.PointerEventType.Unselect, Oculus.Interaction.PointerEventType.Unhover })
             Poke(arrow, 402, p, t);
-        yield return null;
+        yield return new UnityEngine.WaitForSeconds(0.6f); // The strip slides over
         log.AppendLine($"{name}: first shown {w} -> {firstShown()} (expect {(expect < 0 ? "-1, newer" : "+1, older")} unless at the end)");
     }
     d.SetData("xrsim.done", true);

@@ -1,5 +1,5 @@
 // Renders a gallery sequence frame by frame from the head's view into __OUT__/video/:
-// palm turns toward the face (gallery scales in), pages right twice and left once, palm turns away.
+// the open palm turns up (gallery scales in above it), pages right twice and left once, palm turns away.
 // Needs hook.cs installed. Rendering + PNG encoding is slow (~1-2 min for ~170 frames); wait with wait_log.sh.
 var lib = UnityEngine.Object.FindFirstObjectByType<SpatialPhotos.PhotoLibrary>();
 var gallery = UnityEngine.Object.FindFirstObjectByType<SpatialPhotos.WristGallery>();
@@ -22,9 +22,9 @@ var rt = new UnityEngine.RenderTexture(840, 600, 24);
 var tex = new UnityEngine.Texture2D(840, 600, UnityEngine.TextureFormat.RGB24, false);
 int frame = 0;
 
-var pos = headT.position + headT.forward * 0.42f + headT.right * 0.04f - headT.up * 0.12f;
-var toHead = (headT.position - pos).normalized;
-var baseRot = UnityEngine.Quaternion.LookRotation(UnityEngine.Vector3.ProjectOnPlane(UnityEngine.Vector3.up, toHead), -toHead);
+var flat = UnityEngine.Vector3.ProjectOnPlane(headT.forward, UnityEngine.Vector3.up).normalized;
+var pos = headT.position + flat * 0.32f - UnityEngine.Vector3.Cross(UnityEngine.Vector3.up, flat) * 0.06f - UnityEngine.Vector3.up * 0.3f;
+var baseRot = UnityEngine.Quaternion.LookRotation(flat, UnityEngine.Vector3.down); // Palm (-Y) up, fingers forward
 void SetTilt(float tilt) { d.SetData("lh.pos", pos); d.SetData("lh.rot", UnityEngine.Quaternion.AngleAxis(tilt, baseRot * UnityEngine.Vector3.forward) * baseRot); }
 
 void Grab()

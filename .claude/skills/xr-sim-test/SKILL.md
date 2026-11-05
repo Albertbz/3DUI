@@ -1,6 +1,6 @@
 ---
 name: xr-sim-test
-description: Test this project's photo capture and wrist gallery without a headset, by running Play mode in the Meta XR Simulator and scripting hand poses, pinches, grabs and pokes from the Unity CLI. Use when asked to test, verify or check the wrist gallery, photo capture, pinch frame, grabbing or poking in the simulator, or after changing WristGallery, GalleryThumbnail, PhotoObject, PhotoCapture, PhotoLibrary, HandPinchManager or ImageBoundaryBox.
+description: Test this project's photo capture and wrist gallery without a headset, by running Play mode in the Meta XR Simulator and scripting hand poses, pinches, grabs and pokes from the Unity CLI. Use when asked to test, verify or check the wrist gallery, photo capture, pinch frame, grabbing or poking in the simulator, or after changing WristGallery, GalleryThumbnail (pinch drag), PokeButton, PhotoObject, PhotoResizeTransformer, hand grab alignment, PhotoCapture, PhotoLibrary, HandPinchManager or ImageBoundaryBox.
 ---
 
 # Testing the photo feature in the Meta XR Simulator
@@ -39,16 +39,16 @@ export XRSIM_OUT=<scratchpad>/xrsim        # optional
 
 ```bash
 ./ev.sh pose.cs off;  sleep 1.5; ./ev.sh state.cs default        # real resting pose, palm down: hidden
-./ev.sh pose.cs face; sleep 1.5; ./ev.sh state.cs palm_to_face   # visible, facesViewer≈1, upright>0.9, notMirrored>0.9
-./ev.sh pose.cs tray; sleep 1.5; ./ev.sh state.cs                # palm up below the head: visible
-for t in 53 66 53 40; do ./ev.sh pose.cs face $t; sleep 1; ./ev.sh state.cs | head -1; done
-#   palm·toHead 0.60 -> still visible, 0.41 -> hidden, 0.60 -> still hidden, 0.77 -> visible (hysteresis 0.7 / 0.5)
+./ev.sh pose.cs face; sleep 1.5; ./ev.sh state.cs                # palm toward the eyes, not up: hidden
+./ev.sh pose.cs palm; sleep 1.5; ./ev.sh state.cs above_palm     # visible, facesViewer≈1, notMirrored>0.9, abovePalm=Height Above Palm, rightOfPalm≈0.19
+for t in 50 62 50 40; do ./ev.sh pose.cs palm $t; sleep 1; ./ev.sh state.cs | head -1; done
+#   palm·up 0.64 -> still visible, 0.47 -> hidden, 0.64 -> still hidden, 0.77 -> visible (hysteresis 0.7 / 0.5)
 M=$(./metavr.sh)
 $M xrsim input source --hand left --source none; sleep 1.5; ./ev.sh state.cs | head -1   # real tracking loss: hidden
 $M xrsim input source --hand left --source hand; sleep 2;   ./ev.sh state.cs | head -1   # back: visible
 ```
 
-Look at `shots/palm_to_face.png`. The thumbnails should be upright and evenly spaced, with ← on the left and → on the right. The arrow-to-arrow `width` angle should stay below ~50°.
+Look at `shots/above_palm.png`. The thumbnails should be upright and evenly spaced, with ← on the left and → on the right. The arrow-to-arrow `width` angle should stay below ~50°. `upright` is against the head's up, so it drops a little when the head looks down; the gallery itself is kept upright against world up. The pose override moves the hand anchor, which decides whether the gallery shows, but not the hand joints: the gallery floats over the simulator's own (drawn) hand, at its palm joint. `abovePalm` is measured from that joint and equals Height Above Palm (the scene sets 0.2); `rightOfPalm` is the gallery centre's offset toward the viewer's right, which puts the panel's left edge Gap Right Of Palm (4 cm) from the palm.
 
 **2. Pinch capture.** Then compare the camera image with the saved photo.
 
@@ -70,7 +70,7 @@ View `shots/frame_Viewfinder.png`, `frame_Glow.png`, `frame_MarchingAnts.png`, `
 **2c. Gallery look.** The gallery uses the frame's outline (`FrameOutline`): a marching-ants panel, solid thumbnail rims that switch to marching ants on hover or grab, and outlined arrows that brighten when pressed.
 
 ```bash
-./ev.sh pose.cs face; sleep 1.5
+./ev.sh pose.cs palm; sleep 1.5
 ./ev.sh gallery_look.cs gallery_idle                # close-up render + every outline's size/dashed/activity
 ./ev.sh gallery_look.cs x hover 0; ./ev.sh gallery_look.cs gallery_hover   # thumbnail 0 dashed=True
 ./ev.sh gallery_look.cs x grab 0;  ./ev.sh gallery_look.cs gallery_grab    # dashed=True, activity ~1
@@ -94,12 +94,52 @@ Render in a separate call after the event: the outline switches in the next `Upd
 ./ev.sh grab.cs && ./wait_log.sh      # slow drag floats where released; fast throw falls, fades, is destroyed
 ```
 
+**3b. Two-hand resize.** Takes a photo in front of the head if none is in the scene.
+
+```bash
+./ev.sh resize.cs && ./wait_log.sh   # apart 1.5x / together 0.6x with a 30° turn, min-size clamp, one hand then none
+```
+
+Hands should stay on the same spots of the photo, the transform scale stays 1 and the outline keeps its thickness.
+
+```bash
+./ev.sh resize_hands.cs && ./wait_log.sh   # real HandGrabInteractors: visual hands stay free during a two-hand grab
+```
+
+`resize_hands.cs` force-selects the photo with both `HandGrabInteractor`s. The simulator's tracked hands can't be moved from code, so it turns the photo inside the grab instead and measures how far each visual (synthetic) wrist ends up from the tracked wrist: 0 mm with the fix. The control run puts back `AlignOnGrab` and shows the visual wrists swinging ~13 cm away with the photo.
+
 **4. Gallery interactions.**
 
 ```bash
-./ev.sh pose.cs face; sleep 1.5
+./ev.sh pose.cs palm; sleep 1.5
 ./ev.sh gallery_interact.cs && ./wait_log.sh   # layout, short/long thumbnail pull, swipe, arrows
 ```
+
+**4a. Smooth scrolling.** The strip follows the finger while dragging, fades photos in and out at the edges, and settles on the nearest photo on release.
+
+```bash
+./ev.sh smooth_scroll.cs && ./wait_log.sh   # steady per-frame steps; 0.4 slot springs back, 0.7 moves on by one
+```
+
+**4a2. Pinch drag on a thumbnail.** Along the strip scrolls; away from it (toward you or straight up) pulls out; scrolling then moving away switches to a pull; jitter does nothing; the pokes switch off while a thumbnail is held. Also prints the poke hover zones.
+
+```bash
+./ev.sh thumb_drag.cs && ./wait_log.sh   # 8 cm sideways: strip follows ~1.2 slots, no photo; 13 cm toward you: grows to ~1.15x, comes out, no scroll
+```
+
+Each hand's interactors sit in a `BestHoverInteractorGroup` with `PokeInteractor` first, so a poke zone near a thumbnail blocks pinching it; the zones should print 2 cm. `WristGallery` also switches its pokes off when a hand near the strip starts to pinch (`UpdatePinchTakeover`). That path reads real pinch strength and fingertip joints, which the simulator can't set from code, so it needs a headset; the script only covers the held-thumbnail half.
+
+**4b. Deleting a photo.** Pokes a thumbnail's corner ×, then the popup's buttons. Deletes a seeded test photo, not one of the user's.
+
+```bash
+./ev.sh pose.cs palm; sleep 1.5
+./ev.sh delete_photo.cs popup 1                 # cross top-right and in front, popup above the photo, thumbnail red
+./ev.sh gallery_look.cs gallery_delete          # render of the popup
+./ev.sh delete_photo.cs cancel 1                # popup closes, nothing deleted
+./ev.sh delete_photo.cs popup 1; ./ev.sh delete_photo.cs confirm 1   # library -1; its PNG + JSON leave the photo folder
+```
+
+Turning the palm away while the popup is open cancels it. If `delete_photo.cs` reports the popup isn't above the gallery, check `state.cs`: the gallery may have hidden because the pose override dropped (run `hook.cs` and `pose.cs palm` again, or restart Play mode).
 
 **5. Video (optional).**
 
@@ -119,7 +159,7 @@ The Editor keeps using the simulator for Play mode until Unity restarts.
 
 ## Reporting
 
-Give the user a table of every check with ✅/❌. Name the scripted parts honestly: hand poses and pinches were set from code, and grabs and pokes were sent as Interaction SDK pointer events. Send the key renders: the palm_to_face shot, frame_drawn, the crop comparison and the video strip.
+Give the user a table of every check with ✅/❌. Name the scripted parts honestly: hand poses and pinches were set from code, and grabs and pokes were sent as Interaction SDK pointer events. Send the key renders: the above_palm shot, frame_drawn, the crop comparison and the video strip.
 
 Always list what this can't cover:
 - real finger-pose detection (pinch and grab quality)
