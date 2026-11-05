@@ -40,7 +40,7 @@ export XRSIM_OUT=<scratchpad>/xrsim        # optional
 ```bash
 ./ev.sh pose.cs off;  sleep 1.5; ./ev.sh state.cs default        # real resting pose, palm down: hidden
 ./ev.sh pose.cs face; sleep 1.5; ./ev.sh state.cs                # palm toward the eyes, not up: hidden
-./ev.sh pose.cs palm; sleep 1.5; ./ev.sh state.cs above_palm     # visible, facesViewer≈1, notMirrored>0.9, abovePalm=0.120 offCentre≈0
+./ev.sh pose.cs palm; sleep 1.5; ./ev.sh state.cs above_palm     # visible, facesViewer≈1, notMirrored>0.9, abovePalm=Height Above Palm, rightOfPalm≈0.19
 for t in 50 62 50 40; do ./ev.sh pose.cs palm $t; sleep 1; ./ev.sh state.cs | head -1; done
 #   palm·up 0.64 -> still visible, 0.47 -> hidden, 0.64 -> still hidden, 0.77 -> visible (hysteresis 0.7 / 0.5)
 M=$(./metavr.sh)
@@ -48,7 +48,7 @@ $M xrsim input source --hand left --source none; sleep 1.5; ./ev.sh state.cs | h
 $M xrsim input source --hand left --source hand; sleep 2;   ./ev.sh state.cs | head -1   # back: visible
 ```
 
-Look at `shots/above_palm.png`. The thumbnails should be upright and evenly spaced, with ← on the left and → on the right. The arrow-to-arrow `width` angle should stay below ~50°. `upright` is against the head's up, so it drops a little when the head looks down; the gallery itself is kept upright against world up. The pose override moves the hand anchor, which decides whether the gallery shows, but not the hand joints: the gallery floats over the simulator's own (drawn) hand, at its palm joint. `abovePalm` is measured from that joint and equals Height Above Palm (the scene sets 0.2).
+Look at `shots/above_palm.png`. The thumbnails should be upright and evenly spaced, with ← on the left and → on the right. The arrow-to-arrow `width` angle should stay below ~50°. `upright` is against the head's up, so it drops a little when the head looks down; the gallery itself is kept upright against world up. The pose override moves the hand anchor, which decides whether the gallery shows, but not the hand joints: the gallery floats over the simulator's own (drawn) hand, at its palm joint. `abovePalm` is measured from that joint and equals Height Above Palm (the scene sets 0.2); `rightOfPalm` is the gallery centre's offset toward the viewer's right, which puts the panel's left edge Gap Right Of Palm (4 cm) from the palm.
 
 **2. Pinch capture.** Then compare the camera image with the saved photo.
 

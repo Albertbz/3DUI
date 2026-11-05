@@ -55,6 +55,8 @@ namespace SpatialPhotos
         [Tooltip("Palm centre in the wrist transform's local space, used only while there is no hand joint data")]
         [SerializeField] private Vector3 palmCenterLocal = new Vector3(0f, 0f, 0.06f);
         [SerializeField] private float heightAbovePalm = 0.12f;     // To the middle of the thumbnail strip
+        [Tooltip("Space between the palm centre and the gallery's left edge, toward the viewer's right, so the hand doesn't cover what you're selecting")]
+        [SerializeField] private float gapRightOfPalm = 0.04f;
         [SerializeField] private float followSmoothing = 25f;      // Higher follows the hand more tightly
 
         [Header("Open-palm detection")]
@@ -149,7 +151,9 @@ namespace SpatialPhotos
             }
 
             // Above the palm centre, facing the eyes; visualRoot's -Z is the side people look at
-            Vector3 target = PalmCenter() + Vector3.up * heightAbovePalm;
+            // Beside the hand, to the viewer's right: the panel's left edge sits Gap Right Of Palm from the palm centre
+            Vector3 viewerRight = Vector3.ProjectOnPlane(head.right, Vector3.up).normalized;
+            Vector3 target = PalmCenter() + Vector3.up * heightAbovePalm + viewerRight * (gapRightOfPalm - panelMinX);
             Vector3 toGallery = Vector3.ProjectOnPlane(target - head.position, Vector3.up).sqrMagnitude > 1e-6f
                 ? target - head.position
                 : head.forward;

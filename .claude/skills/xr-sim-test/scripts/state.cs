@@ -18,7 +18,7 @@ if (v.gameObject.activeSelf)
 {
     var toView = (head.position - v.position).normalized;
     var l = v.Find("LeftArrow"); var r = v.Find("RightArrow");
-    s.Append($" facesViewer={UnityEngine.Vector3.Dot(-v.forward, toView):F2} upright={UnityEngine.Vector3.Dot(v.up, head.up):F2} notMirrored={UnityEngine.Vector3.Dot(v.right, head.right):F2} dist={UnityEngine.Vector3.Distance(v.position, head.position):F2}m abovePalm={v.position.y - palmCenter.y:F3}m offCentre={UnityEngine.Vector3.ProjectOnPlane(v.position - palmCenter, UnityEngine.Vector3.up).magnitude:F3}m");
+    s.Append($" facesViewer={UnityEngine.Vector3.Dot(-v.forward, toView):F2} upright={UnityEngine.Vector3.Dot(v.up, head.up):F2} notMirrored={UnityEngine.Vector3.Dot(v.right, head.right):F2} dist={UnityEngine.Vector3.Distance(v.position, head.position):F2}m abovePalm={v.position.y - palmCenter.y:F3}m rightOfPalm={UnityEngine.Vector3.Dot(v.position - palmCenter, UnityEngine.Vector3.ProjectOnPlane(head.right, UnityEngine.Vector3.up).normalized):F3}m");
     if (l != null && r != null) s.Append($" width={UnityEngine.Vector3.Angle(l.position - head.position, r.position - head.position):F0}°");
 }
 var frame = UnityEngine.Object.FindFirstObjectByType<SpatialPhotos.CaptureFrameVisual>(UnityEngine.FindObjectsInactive.Include);
