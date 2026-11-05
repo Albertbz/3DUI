@@ -26,6 +26,11 @@ namespace SpatialPhotos
 
         [Header("Scrolling")]
         [SerializeField] private PokeInteractable swipeSurface; // Optional: poke and drag along the strip
+        [Tooltip("How close a fingertip must come to the strip before poking it. Each hand hovers one interactor at a time and poke goes first, so a large zone would block pinching a thumbnail.")]
+        [SerializeField] private float swipeHoverDistance = 0.02f;
+        [Tooltip("Pinch strength at which a hand near the strip stops poking it, so the pinch can grab a thumbnail instead")]
+        [SerializeField] private float pinchTakeoverStrength = 0.3f;
+        [SerializeField] private float pinchTakeoverReach = 0.1f;   // Index tip distance from the strip
         [SerializeField] private PokeInteractable leftArrow;    // Optional
         [SerializeField] private PokeInteractable rightArrow;   // Optional
         [SerializeField] private float scrollSmoothing = 12f;   // How quickly the strip settles after a swipe or arrow press
@@ -61,6 +66,9 @@ namespace SpatialPhotos
         [SerializeField] private float scaleSpeed = 1f / 0.15f;
 
         private IHand palm;
+        private IHand leftData;
+        private IHand rightData;
+        private bool pokesEnabled = true;
         private readonly List<GalleryThumbnail> thumbnails = new List<GalleryThumbnail>();
         private int firstIndex;
         private float scrollPosition; // In slots: 1.5 means halfway between the 2nd and 3rd photo at the left edge
@@ -92,6 +100,10 @@ namespace SpatialPhotos
                 GalleryThumbnail thumbnail = Instantiate(thumbnailPrefab, slot, false);
                 thumbnail.Init(library, photoPrefab, slotSpacing - thumbnailGap);
                 thumbnail.DeleteRequested += RequestDelete;
+                // Pinching a thumbnail and moving sideways scrolls like a swipe
+                thumbnail.ScrollDragStarted += BeginDrag;
+                thumbnail.ScrollDragMoved += delta => Drag(-delta);
+                thumbnail.ScrollDragEnded += EndDrag;
                 thumbnails.Add(thumbnail);
             }
 
@@ -99,6 +111,12 @@ namespace SpatialPhotos
             CreateConfirmPopup();
             leftArrowOutline = StyleArrow(leftArrow);
             rightArrowOutline = StyleArrow(rightArrow);
+
+            if (swipeSurface != null)
+            {
+                swipeSurface.EnterHoverNormal = swipeHoverDistance;
+                swipeSurface.ExitHoverNormal = swipeHoverDistance * 2f;
+            }
 
             CaptureLayers.Apply(gameObject, CaptureLayers.CaptureIgnore);
 
@@ -148,10 +166,41 @@ namespace SpatialPhotos
                 Vector3.Lerp(transform.position, target, t), Quaternion.Slerp(transform.rotation, rotation, t));
         }
 
+        // Each hand hovers one interactor at a time and poke goes first, so a finger touching the strip would keep
+        // the pinch from grabbing a thumbnail. Once a hand near the strip starts to pinch, switch the strip's pokes
+        // off (cancelling a swipe in progress) until the pinch and any grab end
+        private void UpdatePinchTakeover()
+        {
+            leftData ??= FindHand(Handedness.Left);
+            rightData ??= FindHand(Handedness.Right);
+            bool pinchNear = PinchingNear(leftData) || PinchingNear(rightData);
+            SetPokesEnabled(!pinchNear && !GalleryThumbnail.AnyHeld);
+        }
+
+        private bool PinchingNear(IHand hand)
+        {
+            return hand != null
+                && hand.GetFingerPinchStrength(HandFinger.Index) >= pinchTakeoverStrength
+                && hand.GetJointPose(HandJointId.HandIndexTip, out Pose tip)
+                && Vector3.Distance(tip.position, stripRoot.position) < pinchTakeoverReach + (visibleSlots * 0.5f) * slotSpacing
+                && Mathf.Abs(stripRoot.InverseTransformPoint(tip.position).y) < pinchTakeoverReach;
+        }
+
+        private void SetPokesEnabled(bool enabled)
+        {
+            if (enabled == pokesEnabled) return;
+            pokesEnabled = enabled;
+            if (swipeSurface != null) swipeSurface.enabled = enabled;
+            foreach (GalleryThumbnail thumbnail in thumbnails)
+            {
+                thumbnail.SetPokeEnabled(enabled);
+            }
+        }
+
         // The tracked palm joint, so the gallery sits over the middle of the hand whatever the anchor's origin is
         private Vector3 PalmCenter()
         {
-            palm ??= palmHand as IHand ?? FindLeftHand();
+            palm ??= palmHand as IHand ?? FindHand(Handedness.Left);
             if (palm != null && palm.GetJointPose(HandJointId.HandPalm, out Pose palmPose))
             {
                 return palmPose.position;
@@ -160,11 +209,11 @@ namespace SpatialPhotos
         }
 
         // A tracked hand, not a synthetic one: those are pinned to whatever the hand is grabbing
-        private static IHand FindLeftHand()
+        private static IHand FindHand(Handedness handedness)
         {
             foreach (Hand hand in FindObjectsByType<Hand>(FindObjectsSortMode.None))
             {
-                if (!(hand is SyntheticHand) && hand.IsTrackedDataValid && hand.Handedness == Handedness.Left)
+                if (!(hand is SyntheticHand) && hand.IsTrackedDataValid && hand.Handedness == handedness)
                 {
                     return hand;
                 }
@@ -195,6 +244,7 @@ namespace SpatialPhotos
         private void Update()
         {
             UpdateShown();
+            UpdatePinchTakeover();
             if (!shown && pendingDelete != null)
             {
                 CancelDelete();
@@ -373,25 +423,41 @@ namespace SpatialPhotos
             float x = stripRoot.InverseTransformPoint(evt.Pose.position).x;
             switch (evt.Type)
             {
-                case PointerEventType.Select when !GalleryThumbnail.AnyHeld:
-                    swiping = true;
+                case PointerEventType.Select when !GalleryThumbnail.AnyHeld && !swiping:
                     swipeStartX = x;
-                    swipeStartScroll = scrollPosition;
+                    BeginDrag();
                     break;
                 case PointerEventType.Move when swiping:
-                    // The strip follows the finger; dragging it to the left reveals older photos
-                    scrollPosition = Mathf.Clamp(swipeStartScroll + (swipeStartX - x) / slotSpacing, 0f, MaxScroll);
-                    scrollTarget = scrollPosition;
+                    Drag(swipeStartX - x);
                     break;
                 case PointerEventType.Unselect:
                 case PointerEventType.Cancel:
-                    if (swiping)
-                    {
-                        swiping = false;
-                        scrollTarget = Mathf.Round(scrollPosition); // Settle on the nearest photo
-                    }
+                    EndDrag();
                     break;
             }
+        }
+
+        // Shared by poke swipes and sideways pinches on a thumbnail
+        private void BeginDrag()
+        {
+            swiping = true;
+            swipeStartScroll = scrollPosition;
+        }
+
+        /// <param name="leftward">How far the finger has moved to the left since the drag began, in meters.</param>
+        private void Drag(float leftward)
+        {
+            if (!swiping) return;
+            // The strip follows the finger; dragging it to the left reveals older photos
+            scrollPosition = Mathf.Clamp(swipeStartScroll + leftward / slotSpacing, 0f, MaxScroll);
+            scrollTarget = scrollPosition;
+        }
+
+        private void EndDrag()
+        {
+            if (!swiping) return;
+            swiping = false;
+            scrollTarget = Mathf.Round(scrollPosition); // Settle on the nearest photo
         }
 
         private void HandleLeftArrow(PointerEvent evt)

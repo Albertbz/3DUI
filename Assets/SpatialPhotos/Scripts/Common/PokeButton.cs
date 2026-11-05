@@ -23,7 +23,8 @@ namespace SpatialPhotos
 
         private int hoverCount;
 
-        public static PokeButton Create(Transform parent, string name, Vector2 size, float cornerRadius)
+        /// <param name="hoverDistance">How close a fingertip must come before the button reacts, in meters.</param>
+        public static PokeButton Create(Transform parent, string name, Vector2 size, float cornerRadius, float hoverDistance = 0.02f)
         {
             var buttonObject = new GameObject(name);
             buttonObject.layer = parent.gameObject.layer;
@@ -38,6 +39,10 @@ namespace SpatialPhotos
             var button = buttonObject.AddComponent<PokeButton>();
             button.Interactable = buttonObject.AddComponent<PokeInteractable>();
             button.Interactable.InjectAllPokeInteractable(clippedPlane);
+            // Each hand hovers one interactor at a time and poke goes first: keep the zone small so these buttons
+            // don't block pinching what's around them
+            button.Interactable.EnterHoverNormal = hoverDistance;
+            button.Interactable.ExitHoverNormal = hoverDistance * 2f;
             button.Interactable.WhenPointerEventRaised += button.HandlePointerEvent;
 
             button.Outline = FrameOutline.Create(buttonObject.transform, "Outline");

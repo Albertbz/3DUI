@@ -1,6 +1,6 @@
 ---
 name: xr-sim-test
-description: Test this project's photo capture and wrist gallery without a headset, by running Play mode in the Meta XR Simulator and scripting hand poses, pinches, grabs and pokes from the Unity CLI. Use when asked to test, verify or check the wrist gallery, photo capture, pinch frame, grabbing or poking in the simulator, or after changing WristGallery, GalleryThumbnail, PokeButton, PhotoObject, PhotoResizeTransformer, hand grab alignment, PhotoCapture, PhotoLibrary, HandPinchManager or ImageBoundaryBox.
+description: Test this project's photo capture and wrist gallery without a headset, by running Play mode in the Meta XR Simulator and scripting hand poses, pinches, grabs and pokes from the Unity CLI. Use when asked to test, verify or check the wrist gallery, photo capture, pinch frame, grabbing or poking in the simulator, or after changing WristGallery, GalleryThumbnail (pinch drag), PokeButton, PhotoObject, PhotoResizeTransformer, hand grab alignment, PhotoCapture, PhotoLibrary, HandPinchManager or ImageBoundaryBox.
 ---
 
 # Testing the photo feature in the Meta XR Simulator
@@ -120,6 +120,14 @@ Hands should stay on the same spots of the photo, the transform scale stays 1 an
 ```bash
 ./ev.sh smooth_scroll.cs && ./wait_log.sh   # steady per-frame steps; 0.4 slot springs back, 0.7 moves on by one
 ```
+
+**4a2. Pinch drag on a thumbnail.** Along the strip scrolls; away from it (toward you or straight up) pulls out; scrolling then moving away switches to a pull; jitter does nothing; the pokes switch off while a thumbnail is held. Also prints the poke hover zones.
+
+```bash
+./ev.sh thumb_drag.cs && ./wait_log.sh   # 8 cm sideways: strip follows ~1.2 slots, no photo; 13 cm toward you: grows to ~1.15x, comes out, no scroll
+```
+
+Each hand's interactors sit in a `BestHoverInteractorGroup` with `PokeInteractor` first, so a poke zone near a thumbnail blocks pinching it; the zones should print 2 cm. `WristGallery` also switches its pokes off when a hand near the strip starts to pinch (`UpdatePinchTakeover`). That path reads real pinch strength and fingertip joints, which the simulator can't set from code, so it needs a headset; the script only covers the held-thumbnail half.
 
 **4b. Deleting a photo.** Pokes a thumbnail's corner ×, then the popup's buttons. Deletes a seeded test photo, not one of the user's.
 
