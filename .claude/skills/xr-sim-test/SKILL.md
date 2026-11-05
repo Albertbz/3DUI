@@ -1,6 +1,6 @@
 ---
 name: xr-sim-test
-description: Test this project's photo capture and wrist gallery without a headset, by running Play mode in the Meta XR Simulator and scripting hand poses, pinches, grabs and pokes from the Unity CLI. Use when asked to test, verify or check the wrist gallery, photo capture, pinch frame, grabbing or poking in the simulator, or after changing WristGallery, GalleryThumbnail, PhotoObject, PhotoCapture, PhotoLibrary, HandPinchManager or ImageBoundaryBox.
+description: Test this project's photo capture and wrist gallery without a headset, by running Play mode in the Meta XR Simulator and scripting hand poses, pinches, grabs and pokes from the Unity CLI. Use when asked to test, verify or check the wrist gallery, photo capture, pinch frame, grabbing or poking in the simulator, or after changing WristGallery, GalleryThumbnail, PokeButton, PhotoObject, PhotoCapture, PhotoLibrary, HandPinchManager or ImageBoundaryBox.
 ---
 
 # Testing the photo feature in the Meta XR Simulator
@@ -100,6 +100,24 @@ Render in a separate call after the event: the outline switches in the next `Upd
 ./ev.sh pose.cs face; sleep 1.5
 ./ev.sh gallery_interact.cs && ./wait_log.sh   # layout, short/long thumbnail pull, swipe, arrows
 ```
+
+**4a. Smooth scrolling.** The strip follows the finger while dragging, fades photos in and out at the edges, and settles on the nearest photo on release.
+
+```bash
+./ev.sh smooth_scroll.cs && ./wait_log.sh   # steady per-frame steps; 0.4 slot springs back, 0.7 moves on by one
+```
+
+**4b. Deleting a photo.** Pokes a thumbnail's corner ×, then the popup's buttons. Deletes a seeded test photo, not one of the user's.
+
+```bash
+./ev.sh pose.cs face; sleep 1.5
+./ev.sh delete_photo.cs popup 1                 # cross top-right and in front, popup above the photo, thumbnail red
+./ev.sh gallery_look.cs gallery_delete          # render of the popup
+./ev.sh delete_photo.cs cancel 1                # popup closes, nothing deleted
+./ev.sh delete_photo.cs popup 1; ./ev.sh delete_photo.cs confirm 1   # library -1; its PNG + JSON leave the photo folder
+```
+
+Turning the palm away while the popup is open cancels it. If `delete_photo.cs` reports the popup isn't above the gallery, check `state.cs`: the gallery may have hidden because the pose override dropped (run `hook.cs` and `pose.cs face` again, or restart Play mode).
 
 **5. Video (optional).**
 

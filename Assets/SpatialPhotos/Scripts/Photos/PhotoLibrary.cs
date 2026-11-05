@@ -17,6 +17,7 @@ namespace SpatialPhotos
         public float HeightM;
         public DateTime Taken;
         public Texture2D Thumbnail;
+        public bool Deleted;
     }
 
     public class PhotoLibrary : MonoBehaviour
@@ -38,6 +39,7 @@ namespace SpatialPhotos
         public IReadOnlyList<PhotoEntry> Entries => entries;
 
         public event Action<PhotoEntry> OnPhotoAdded;
+        public event Action<PhotoEntry> OnPhotoRemoved;
         public event Action OnLibraryLoaded;
 
         private string PhotoDirectory => Path.Combine(Application.persistentDataPath, "Photos");
@@ -118,6 +120,10 @@ namespace SpatialPhotos
 
             AsyncGPUReadback.Request(photo, 0, TextureFormat.RGBA32, request =>
             {
+                if (entry.Deleted)
+                {
+                    return;
+                }
                 if (request.hasError)
                 {
                     Debug.LogError("PhotoLibrary: GPU readback failed, photo not saved.");
@@ -129,10 +135,40 @@ namespace SpatialPhotos
                 byte[] pngBytes = png.ToArray();
                 png.Dispose();
 
-                WriteFilesAsync(entry.PngPath, pngBytes, metadataJson);
+                WriteFilesAsync(entry, pngBytes, metadataJson);
             });
 
             return entry;
+        }
+
+        /// <summary>
+        /// Removes the photo from the library and deletes its PNG and metadata from disk.
+        /// Photos already floating in the room stay until they are thrown away.
+        /// </summary>
+        public void Delete(PhotoEntry entry)
+        {
+            if (entry == null || entry.Deleted || !entries.Remove(entry))
+            {
+                return;
+            }
+            lock (entry)
+            {
+                entry.Deleted = true; // A save that hasn't started yet skips writing
+            }
+            OnPhotoRemoved?.Invoke(entry);
+
+            // A photo pulled out before its PNG was saved shows the thumbnail; keep it alive for that photo
+            bool thumbnailInUse = false;
+            foreach (PhotoObject photo in FindObjectsByType<PhotoObject>(FindObjectsSortMode.None))
+            {
+                thumbnailInUse |= photo.Entry == entry;
+            }
+            if (!thumbnailInUse)
+            {
+                Destroy(entry.Thumbnail);
+            }
+
+            DeleteFilesAsync(entry);
         }
 
         /// <summary>Loads the full resolution image for an entry. Caller owns the returned texture.</summary>
@@ -141,20 +177,53 @@ namespace SpatialPhotos
             return LoadTextureFromDisk(entry.PngPath);
         }
 
-        private static async void WriteFilesAsync(string pngPath, byte[] pngBytes, string metadataJson)
+        private static async void WriteFilesAsync(PhotoEntry entry, byte[] pngBytes, string metadataJson)
         {
+            string pngPath = entry.PngPath;
             try
             {
-                await Task.Run(() =>
+                bool saved = await Task.Run(() =>
                 {
-                    File.WriteAllBytes(pngPath, pngBytes);
-                    File.WriteAllText(Path.ChangeExtension(pngPath, ".json"), metadataJson);
+                    lock (entry)
+                    {
+                        if (entry.Deleted)
+                        {
+                            return false; // Deleted before it was saved
+                        }
+                        File.WriteAllBytes(pngPath, pngBytes);
+                        File.WriteAllText(Path.ChangeExtension(pngPath, ".json"), metadataJson);
+                        return true;
+                    }
                 });
-                Debug.Log($"Photo saved to {pngPath}");
+                if (saved)
+                {
+                    Debug.Log($"Photo saved to {pngPath}");
+                }
             }
             catch (Exception e)
             {
                 Debug.LogError($"PhotoLibrary: failed to save {pngPath}: {e}");
+            }
+        }
+
+        private static async void DeleteFilesAsync(PhotoEntry entry)
+        {
+            string pngPath = entry.PngPath;
+            try
+            {
+                await Task.Run(() =>
+                {
+                    lock (entry) // Waits for a save in progress
+                    {
+                        File.Delete(pngPath);
+                        File.Delete(Path.ChangeExtension(pngPath, ".json"));
+                    }
+                });
+                Debug.Log($"Photo deleted: {pngPath}");
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"PhotoLibrary: failed to delete {pngPath}: {e}");
             }
         }
 

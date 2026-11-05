@@ -79,6 +79,7 @@ System.Collections.IEnumerator Run()
     for (int i = 1; i <= 10; i++) { pose.position = UnityEngine.Vector3.Lerp(a, b, i / 10f); Poke(swipe, 401, pose, Oculus.Interaction.PointerEventType.Move); yield return null; }
     Poke(swipe, 401, pose, Oculus.Interaction.PointerEventType.Unselect);
     Poke(swipe, 401, pose, Oculus.Interaction.PointerEventType.Unhover);
+    yield return new UnityEngine.WaitForSeconds(0.6f); // Settles on the nearest photo
     log.AppendLine($"swipe left: first shown {was} -> {firstShown()} (expect it to increase = older)");
 
     foreach (var (name, expect) in new[] { ("LeftArrow", -1), ("RightArrow", 1) })
@@ -89,7 +90,7 @@ System.Collections.IEnumerator Run()
         int w = firstShown();
         foreach (var t in new[] { Oculus.Interaction.PointerEventType.Hover, Oculus.Interaction.PointerEventType.Select, Oculus.Interaction.PointerEventType.Unselect, Oculus.Interaction.PointerEventType.Unhover })
             Poke(arrow, 402, p, t);
-        yield return null;
+        yield return new UnityEngine.WaitForSeconds(0.6f); // The strip slides over
         log.AppendLine($"{name}: first shown {w} -> {firstShown()} (expect {(expect < 0 ? "-1, newer" : "+1, older")} unless at the end)");
     }
     d.SetData("xrsim.done", true);

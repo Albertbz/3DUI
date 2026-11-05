@@ -1,6 +1,6 @@
 # Spatial Photos
 
-Pinch with both hands and pull them apart to draw a frame. Release to take a photo of what's inside, both the real room (passthrough camera) and virtual content. Photos float where they were taken; grab them, move them, or throw them away. A gallery on your left wrist shows saved photos when you turn your palm toward you, and you can pull a photo out of it.
+Pinch with both hands and pull them apart to draw a frame. Release to take a photo of what's inside, both the real room (passthrough camera) and virtual content. Photos float where they were taken; grab them, move them, or throw them away. A gallery on your left wrist shows saved photos when you turn your palm toward you, and you can pull a photo out of it. Poke the × in a thumbnail's corner to delete it: a popup above the gallery asks you to confirm or cancel.
 
 Everything lives in this folder. To use it in another project, copy the `SpatialPhotos` folder into `Assets/` and follow the setup below.
 
@@ -37,7 +37,7 @@ That's all the wiring needed. Scene references left empty in the Inspector are f
 | `Scripts/Capture` | `PhotoCapture`: passthrough image + virtual layer → cropped photo |
 | `Scripts/Photos` | `PhotoLibrary` (save and load PNGs), `PhotoObject` (floating photo) |
 | `Scripts/Gallery` | `WristGallery`, `GalleryThumbnail` |
-| `Scripts/Common` | `XRRig` (finds the rig's head and hands), `CaptureLayers` |
+| `Scripts/Common` | `XRRig` (finds the rig's head and hands), `CaptureLayers`, `PokeButton` (poke button built from code) |
 | `Editor/` | the Add Capture Layers menu |
 | `Shaders/`, `Materials/`, `Meshes/`, `Audio/`, `Resources/` | assets used by the above; `Resources/CaptureFrame.mat` is loaded by `FrameOutline` |
 
@@ -48,7 +48,8 @@ All scripts are in the `SpatialPhotos` namespace and the `SpatialPhotos` assembl
 - **Frame look:** `PhotoCaptureSystem/CaptureFrame` → `CaptureFrameVisual`. Style (Viewfinder, Glow, Marching Ants, Glass), color, line thickness.
 - **Pinch:** `PinchInput` → `HandPinchManager`. Proximity Threshold is how close the two pinches must start. `ImageBoundaryBox` → Min Capture Size.
 - **Resize sound:** add a `FrameResizeAudio` to `CaptureFrame` to change pitch range, tick spacing and volumes, or to assign your own clips.
-- **Gallery:** `WristGallery` → Visible Slots, Slot Spacing, show/hide thresholds.
+- **Gallery:** `WristGallery` → Visible Slots, Slot Spacing, show/hide thresholds, Scroll Smoothing (how fast the strip settles after a swipe or arrow press).
+  - **Deleting:** `WristGallery` → Confirm Button Size, Confirm Gap and Label Height for the popup; `GalleryThumbnail` → Delete Button Size and Inset for the corner ×. Deleting removes the PNG and JSON; photos already floating in the room stay until thrown away.
   - **Palm Normal Local:** the default (0, −1, 0) matches Meta's hand anchors; change it if the gallery shows on the wrong side of the hand.
   - **Visual:** the child `Visual` holds the gallery's offset from the palm. Scale `WristGallery`, not `Visual`, because `Visual`'s scale is animated.
 
