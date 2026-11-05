@@ -24,6 +24,10 @@ namespace SpatialPhotos
         [SerializeField] private float dismissDuration = 1.5f;
         [SerializeField] private float destroyBelowY = -2f;
 
+        [Header("Two-hand resize (grab with both hands, move them apart or together)")]
+        [SerializeField] private float minHeight = 0.05f;
+        [SerializeField] private float maxHeight = 1.5f;
+
         private static readonly int FlashAmountId = Shader.PropertyToID("_FlashAmount");
         private static readonly int AlphaId = Shader.PropertyToID("_Alpha");
         private static readonly int MainTexId = Shader.PropertyToID("_MainTex");
@@ -33,6 +37,7 @@ namespace SpatialPhotos
 
         public PhotoEntry Entry { get; private set; }
         public bool IsHeld { get; private set; }
+        public Vector2 Size => size;
 
         private Material material;
         private Texture ownedTexture;
@@ -64,6 +69,16 @@ namespace SpatialPhotos
             outline.Padding = 0.015f;
             outline.DashLength = 0.015f;
             outline.Dashed = false;
+
+            // One hand moves and turns the photo; two hands also resize it
+            if (grabbable is Grabbable grab)
+            {
+                grab.InjectOptionalOneGrabTransformer(gameObject.AddComponent<GrabFreeTransformer>());
+                var resize = gameObject.AddComponent<PhotoResizeTransformer>();
+                resize.MinHeight = minHeight;
+                resize.MaxHeight = maxHeight;
+                grab.InjectOptionalTwoGrabTransformer(resize);
+            }
         }
 
         private void OnEnable()
@@ -117,6 +132,12 @@ namespace SpatialPhotos
         public void GrowFrom(Vector2 startSize)
         {
             StartCoroutine(GrowRoutine(startSize, new Vector2(Entry.WidthM, Entry.HeightM)));
+        }
+
+        /// <summary>Changes the photo's size in the room; the outline keeps its stroke width.</summary>
+        public void Resize(Vector2 newSize)
+        {
+            SetSize(newSize);
         }
 
         private void SetSize(Vector2 newSize)

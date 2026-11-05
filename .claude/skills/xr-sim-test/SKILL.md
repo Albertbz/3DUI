@@ -1,6 +1,6 @@
 ---
 name: xr-sim-test
-description: Test this project's photo capture and wrist gallery without a headset, by running Play mode in the Meta XR Simulator and scripting hand poses, pinches, grabs and pokes from the Unity CLI. Use when asked to test, verify or check the wrist gallery, photo capture, pinch frame, grabbing or poking in the simulator, or after changing WristGallery, GalleryThumbnail, PokeButton, PhotoObject, PhotoCapture, PhotoLibrary, HandPinchManager or ImageBoundaryBox.
+description: Test this project's photo capture and wrist gallery without a headset, by running Play mode in the Meta XR Simulator and scripting hand poses, pinches, grabs and pokes from the Unity CLI. Use when asked to test, verify or check the wrist gallery, photo capture, pinch frame, grabbing or poking in the simulator, or after changing WristGallery, GalleryThumbnail, PokeButton, PhotoObject, PhotoResizeTransformer, PhotoCapture, PhotoLibrary, HandPinchManager or ImageBoundaryBox.
 ---
 
 # Testing the photo feature in the Meta XR Simulator
@@ -93,6 +93,14 @@ Render in a separate call after the event: the outline switches in the next `Upd
 ```bash
 ./ev.sh grab.cs && ./wait_log.sh      # slow drag floats where released; fast throw falls, fades, is destroyed
 ```
+
+**3b. Two-hand resize.** Takes a photo in front of the head if none is in the scene.
+
+```bash
+./ev.sh resize.cs && ./wait_log.sh   # apart 1.5x / together 0.6x with a 30° turn, min-size clamp, one hand then none
+```
+
+Hands should stay on the same spots of the photo, the transform scale stays 1 and the outline keeps its thickness.
 
 **4. Gallery interactions.**
 
