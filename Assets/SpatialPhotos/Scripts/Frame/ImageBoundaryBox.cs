@@ -8,11 +8,13 @@ namespace SpatialPhotos
         [SerializeField] private CaptureFrameVisual boundaryFrame;
         [SerializeField] private Camera head;
         [SerializeField] private PhotoCapture photoCapture;
+        [SerializeField] private DominantEyeCalibration calibration; // Takes the frame instead of a photo while it runs; created when empty
         [SerializeField] private float minCaptureSize = 0.05f; // 5 cm, ignore accidental tiny frames
 
         // Last frame computed while pinching, used for the capture on release
         private readonly Vector3[] lastCorners = new Vector3[4];
         private Pose lastPose;
+        private Vector3 lastEye;
         private float lastWidth;
         private float lastHeight;
 
@@ -20,6 +22,8 @@ namespace SpatialPhotos
         {
             if (boundaryFrame == null) boundaryFrame = FindFirstObjectByType<CaptureFrameVisual>(FindObjectsInactive.Include);
             if (photoCapture == null) photoCapture = FindFirstObjectByType<PhotoCapture>();
+            if (calibration == null) calibration = FindFirstObjectByType<DominantEyeCalibration>();
+            if (calibration == null) calibration = gameObject.AddComponent<DominantEyeCalibration>();
             EnableBoundaryFrame(false);
         }
 
@@ -54,6 +58,12 @@ namespace SpatialPhotos
             // Hide the frame first so it can never end up in the photo
             EnableBoundaryFrame(false);
 
+            if (calibration.IsActive)
+            {
+                calibration.Submit(lastPose.position);
+                return;
+            }
+
             if (photoCapture == null)
             {
                 return;
@@ -65,7 +75,7 @@ namespace SpatialPhotos
                 return;
             }
 
-            photoCapture.Capture(lastCorners, lastPose, lastWidth, lastHeight);
+            photoCapture.Capture(lastCorners, lastPose, lastWidth, lastHeight, lastEye);
         }
 
         private void HandleProximityPinchUpdate(Vector3 leftHandPosition, Vector3 rightHandPosition)
@@ -89,8 +99,9 @@ namespace SpatialPhotos
             Vector3 center = (cornerA + cornerB) * 0.5f;
             frameTransform.position = center;
 
-            // 2. Align rotation to face the headset
-            Vector3 forward = (center - head.transform.position).normalized;
+            // 2. Face the eye that sights through the frame: the dominant one, or the head's center while calibrating
+            Transform eye = calibration.IsActive ? head.transform : XRRig.DominantEyeTransform;
+            Vector3 forward = (center - eye.position).normalized;
             Quaternion frameRotation = Quaternion.LookRotation(forward, head.transform.up);
             frameTransform.rotation = frameRotation;
 
@@ -113,6 +124,7 @@ namespace SpatialPhotos
             lastCorners[2] = center + right + up;
             lastCorners[3] = center - right + up;
             lastPose = new Pose(center, frameRotation);
+            lastEye = eye.position;
             lastWidth = width;
             lastHeight = height;
         }

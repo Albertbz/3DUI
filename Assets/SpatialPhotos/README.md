@@ -1,6 +1,8 @@
 # Spatial Photos
 
-Pinch with both hands and pull them apart to draw a frame. Release to take a photo of what's inside, both the real room (passthrough camera) and virtual content. Photos float where they were taken; grab them, move them, or throw them away. Grab one with both hands and move your hands apart or together to resize it. Open your left palm facing up and a gallery of saved photos floats beside it, to the right of your hand and turned toward you, so the hand doesn't cover it; pinch a thumbnail and pull it away from the strip to take the photo out, or move the pinch along the strip to scroll (and then away to take out the photo under your fingers). Poke the × in a thumbnail's corner to delete it: a popup above the gallery asks you to confirm or cancel.
+Pinch with both hands and pull them apart to draw a frame. Release to take a photo of what's inside, both the real room (passthrough camera) and virtual content, as your dominant eye sees it through the frame. Photos float where they were taken; grab them, move them, or throw them away. Grab one with both hands and move your hands apart or together to resize it. Open your left palm facing up and a gallery of saved photos floats beside it, to the right of your hand and turned toward you, so the hand doesn't cover it; pinch a thumbnail and pull it away from the strip to take the photo out, or move the pinch along the strip to scroll (and then away to take out the photo under your fingers). Poke the × in a thumbnail's corner to delete it: a popup above the gallery asks you to confirm or cancel.
+
+On first launch a dot appears a few meters away: keep both eyes open and pinch a frame around it three times. People center a frame for their dominant eye, so this finds which eye that is. It is saved, and the **Eye** button under the gallery runs the test again.
 
 Everything lives in this folder. To use it in another project, copy the `SpatialPhotos` folder into `Assets/` and follow the setup below.
 
@@ -17,13 +19,13 @@ Everything lives in this folder. To use it in another project, copy the `Spatial
    - **Camera Rig**
    - **Hand Tracking**: provides the `OVRHand` on each hand anchor
    - **Passthrough**: on the center eye camera, set Clear Flags to Solid Color with a black background at alpha 0
-   - **Passthrough Camera Access**: Camera Position *Left*, about 1280×960
+   - **Passthrough Camera Access**: about 1280×960. Camera Position is switched at runtime to the dominant eye's side
    - **Hand Grab** and **Poke** interactions, or `OVRInteractionComprehensive` with the controller parts removed
 3. **Put the hand visuals on `CaptureIgnore`** so your hands don't show up in photos. Usually this means the hand tracking objects and the interaction rig's hand visuals.
 4. **Drag in the prefabs** from `Prefabs/`, anywhere in the hierarchy:
    - `PhotoCaptureSystem`: the pinch frame, capture and photo library
    - `WristGallery` (optional): floats above the left hand anchor at runtime
-5. **Android permission:** add `horizonos.permission.HEADSET_CAMERA` to `AndroidManifest.xml`. `PhotoCapture` requests it at startup.
+5. **Android permissions:** add `horizonos.permission.HEADSET_CAMERA` and `com.oculus.permission.USE_SCENE` (environment depth) to `AndroidManifest.xml`. `PhotoCapture` requests them at startup.
 
 That's all the wiring needed. Scene references left empty in the Inspector are found at startup: hands, head, wrist, passthrough camera and photo library. They are looked up through the scene's `OVRCameraRig`, and a warning is logged for anything missing. Assign a field yourself to override the lookup.
 
@@ -34,10 +36,11 @@ That's all the wiring needed. Scene references left empty in the Inspector are f
 | `Prefabs/` | `PhotoCaptureSystem`, `WristGallery`, and `Photo`/`GalleryThumbnail`, which the scripts spawn |
 | `Scripts/Input` | `HandPinchManager`: two-hand proximity pinch events |
 | `Scripts/Frame` | `ImageBoundaryBox` (pinch → frame → capture), `CaptureFrameVisual`, `FrameOutline` (the shared outline look), `FrameResizeAudio` |
-| `Scripts/Capture` | `PhotoCapture`: passthrough image + virtual layer → cropped photo |
+| `Scripts/Capture` | `PhotoCapture`: passthrough image reprojected to the dominant eye + virtual layer → photo |
+| `Scripts/Calibration` | `DominantEyeCalibration`: the sighting test that finds the dominant eye |
 | `Scripts/Photos` | `PhotoLibrary` (save and load PNGs), `PhotoObject` (floating photo), `PhotoResizeTransformer` (two-hand move and resize) |
 | `Scripts/Gallery` | `WristGallery`, `GalleryThumbnail` |
-| `Scripts/Common` | `XRRig` (finds the rig's head and hands), `CaptureLayers`, `PokeButton` (poke button built from code) |
+| `Scripts/Common` | `XRRig` (finds the rig's head, eyes and hands), `DominantEye` (the saved eye), `CaptureLayers`, `PokeButton` (poke button built from code) |
 | `Editor/` | the Add Capture Layers menu |
 | `Shaders/`, `Materials/`, `Meshes/`, `Audio/`, `Resources/` | assets used by the above; `Resources/CaptureFrame.mat` is loaded by `FrameOutline` |
 
@@ -46,6 +49,7 @@ All scripts are in the `SpatialPhotos` namespace and the `SpatialPhotos` assembl
 ## Tuning
 
 - **Frame look:** `PhotoCaptureSystem/CaptureFrame` → `CaptureFrameVisual`. Style (Viewfinder, Glow, Marching Ants, Glass), color, line thickness.
+- **Dominant eye:** the frame faces the dominant eye, and the photo is what that eye sees through it. The real world is taken as a plane at the depth found by MRUK's environment raycast through the frame's center (`PhotoCapture` adds an `EnvironmentRaycastManager` when the device supports it), or `PhotoCapture` → Fallback Depth (2 m) without one. Things much nearer or farther than that plane shift slightly. Calibration: `DominantEyeCalibration`, added to `PhotoCaptureSystem` at runtime when missing. It has Target Distance, Max Angle (3°, how far off the dot the frame may be) and Trials (3).
 - **Pinch:** `PinchInput` → `HandPinchManager`. Proximity Threshold is how close the two pinches must start. `ImageBoundaryBox` → Min Capture Size.
 - **Resize sound:** add a `FrameResizeAudio` to `CaptureFrame` to change pitch range, tick spacing and volumes, or to assign your own clips.
 - **Photo resize:** `Photo` prefab → `PhotoObject` → Min Height and Max Height limit how small or large a two-hand grab can make a photo.

@@ -248,6 +248,7 @@ MonoBehaviour:
   library: {fileID: 1439294995412909320}
   shutterSound: {fileID: 3020007989889750367}
   alphaOverShader: {fileID: 4800000, guid: 1161d78753a824adf95338623941c2bc, type: 3}
+  warpShader: {fileID: 4800000, guid: ac8b415e2d464a68b0eeccb4ce63111c, type: 3}
   captureCullingMask:
     serializedVersion: 2
     m_Bits: 4294967295
