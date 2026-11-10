@@ -104,3 +104,5 @@ Nuget.config*
 **/StreamingAssets/
 
 3DUI_BackUpThisFolder_ButDontShipItWithYourGame/
+# Burst debug information from player builds
+*_BurstDebugInformation_DoNotShip/
