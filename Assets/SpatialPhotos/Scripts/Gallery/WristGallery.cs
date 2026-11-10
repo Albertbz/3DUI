@@ -19,6 +19,7 @@ namespace SpatialPhotos
         [SerializeField] private Transform visualRoot;        // Scaled in/out when shown/hidden
         [SerializeField] private Transform stripRoot;         // Parent of the thumbnail slots
         [SerializeField] private PhotoLibrary library;
+        [SerializeField] private DominantEyeCalibration calibration; // Run again by the Eye button
 
         [Header("Prefabs")]
         [SerializeField] private GalleryThumbnail thumbnailPrefab;
@@ -48,6 +49,10 @@ namespace SpatialPhotos
         [SerializeField] private Vector2 confirmButtonSize = new Vector2(0.07f, 0.022f);
         [SerializeField] private float confirmGap = 0.008f;      // Between the gallery panel and the popup
         [SerializeField] private float labelHeight = 0.006f;
+
+        [Header("Dominant eye button (below the gallery, at its right end)")]
+        [SerializeField] private Vector2 eyeButtonSize = new Vector2(0.045f, 0.018f);
+        [SerializeField] private float eyeButtonGap = 0.008f;    // Between the gallery panel and the button
 
         [Header("Placement above the palm")]
         [Tooltip("Interaction SDK hand whose palm joint the gallery floats above; the rig's left hand when empty")]
@@ -85,6 +90,8 @@ namespace SpatialPhotos
         private float panelMinX;
         private float panelMaxX;
         private float panelTop;
+        private float panelBottom;
+        private TextMesh eyeLabel;
         private Transform confirmPopup;
         private float confirmPopupWidth;
         private PhotoEntry pendingDelete;
@@ -111,6 +118,7 @@ namespace SpatialPhotos
 
             CreatePanel();
             CreateConfirmPopup();
+            CreateEyeButton();
             leftArrowOutline = StyleArrow(leftArrow);
             rightArrowOutline = StyleArrow(rightArrow);
 
@@ -133,6 +141,7 @@ namespace SpatialPhotos
             if (wrist == null) wrist = XRRig.HandAnchor(left: true);
             if (head == null) head = XRRig.Head;
             if (leftHand == null) leftHand = XRRig.Hand(left: true);
+            if (calibration == null) calibration = FindFirstObjectByType<DominantEyeCalibration>();
             if (wrist == null || head == null)
             {
                 XRRig.Warn(this, "the left hand anchor and head");
@@ -233,6 +242,8 @@ namespace SpatialPhotos
             if (swipeSurface != null) swipeSurface.WhenPointerEventRaised += HandleSwipe;
             if (leftArrow != null) leftArrow.WhenPointerEventRaised += HandleLeftArrow;
             if (rightArrow != null) rightArrow.WhenPointerEventRaised += HandleRightArrow;
+            DominantEye.Changed += UpdateEyeLabel;
+            UpdateEyeLabel();
         }
 
         private void OnDisable()
@@ -243,6 +254,7 @@ namespace SpatialPhotos
             if (swipeSurface != null) swipeSurface.WhenPointerEventRaised -= HandleSwipe;
             if (leftArrow != null) leftArrow.WhenPointerEventRaised -= HandleLeftArrow;
             if (rightArrow != null) rightArrow.WhenPointerEventRaised -= HandleRightArrow;
+            DominantEye.Changed -= UpdateEyeLabel;
         }
 
         private void Update()
@@ -497,6 +509,7 @@ namespace SpatialPhotos
             panelMinX = minX - panelMargin;
             panelMaxX = maxX + panelMargin;
             panelTop = stripRoot.localPosition.y + contentHeight * 0.5f + panelMargin;
+            panelBottom = stripRoot.localPosition.y - contentHeight * 0.5f - panelMargin;
 
             FrameOutline panel = FrameOutline.Create(visualRoot, "Panel");
             panel.transform.localPosition = new Vector3((minX + maxX) * 0.5f, stripRoot.localPosition.y, 0.006f); // Behind the content
@@ -549,6 +562,25 @@ namespace SpatialPhotos
             cancel.Pressed += CancelDelete;
 
             confirmPopup.gameObject.SetActive(false);
+        }
+
+        // Shows which eye photos are taken from; poking it runs the dominant eye calibration again
+        private void CreateEyeButton()
+        {
+            PokeButton button = PokeButton.Create(visualRoot, "DominantEyeButton", eyeButtonSize, 0.006f);
+            button.transform.localPosition = new Vector3(
+                panelMaxX - eyeButtonSize.x * 0.5f, panelBottom - eyeButtonGap - eyeButtonSize.y * 0.5f, 0f);
+            eyeLabel = button.AddLabel("", labelHeight);
+            button.Pressed += () =>
+            {
+                if (calibration != null) calibration.Begin();
+            };
+        }
+
+        private void UpdateEyeLabel()
+        {
+            if (eyeLabel == null) return;
+            eyeLabel.text = !DominantEye.HasValue ? "Eye: ?" : DominantEye.Current == Eye.Left ? "Eye: L" : "Eye: R";
         }
 
         // Rounded outline behind the arrow icon, matching the thumbnails

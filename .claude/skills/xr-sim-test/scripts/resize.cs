@@ -12,7 +12,7 @@ if (photo == null)
     var center = head.position + head.forward * 0.5f;
     var rot = UnityEngine.Quaternion.LookRotation(head.forward, head.up);
     var r = rot * UnityEngine.Vector3.right * (w / 2); var u = rot * UnityEngine.Vector3.up * (h / 2);
-    capture.Capture(new[] { center - r - u, center + r - u, center + r + u, center - r + u }, new UnityEngine.Pose(center, rot), w, h);
+    capture.Capture(new[] { center - r - u, center + r - u, center + r + u, center - r + u }, new UnityEngine.Pose(center, rot), w, h, head.position, UnityEngine.Time.time);
 }
 var log = new System.Text.StringBuilder();
 var d = System.AppDomain.CurrentDomain;

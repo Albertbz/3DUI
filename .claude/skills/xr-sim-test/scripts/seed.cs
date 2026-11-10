@@ -13,7 +13,7 @@ for (int i = 0; i < count; i++)
     var center = head.position + UnityEngine.Quaternion.Euler(-5f + 4f * i, -15f + 6f * i, 0) * head.forward * 0.6f;
     var rot = UnityEngine.Quaternion.LookRotation((center - head.position).normalized, head.up);
     var r = rot * UnityEngine.Vector3.right * (w / 2); var u = rot * UnityEngine.Vector3.up * (h / 2);
-    capture.Capture(new[] { center - r - u, center + r - u, center + r + u, center - r + u }, new UnityEngine.Pose(center, rot), w, h);
+    capture.Capture(new[] { center - r - u, center + r - u, center + r + u, center - r + u }, new UnityEngine.Pose(center, rot), w, h, head.position, UnityEngine.Time.time);
 }
 foreach (var p in UnityEngine.Object.FindObjectsByType<SpatialPhotos.PhotoObject>(UnityEngine.FindObjectsSortMode.None)) UnityEngine.Object.Destroy(p.gameObject);
 return $"library={lib.Entries.Count}; passthrough camera playing={pca != null && pca.IsPlaying}";

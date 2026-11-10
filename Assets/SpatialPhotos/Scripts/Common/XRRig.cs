@@ -44,6 +44,23 @@ namespace SpatialPhotos
             }
         }
 
+        /// <summary>The rig's anchor for one eye, which OVRCameraRig moves to that eye's tracked position.</summary>
+        public static Transform Eye(Eye eye)
+        {
+            if (Rig != null)
+            {
+                Transform anchor = eye == SpatialPhotos.Eye.Left ? Rig.leftEyeAnchor : Rig.rightEyeAnchor;
+                if (anchor != null)
+                {
+                    return anchor;
+                }
+            }
+            return Head;
+        }
+
+        /// <summary>The eye that frames and takes photos: the head's center until <see cref="DominantEye"/> is known.</summary>
+        public static Transform DominantEyeTransform => DominantEye.HasValue ? Eye(DominantEye.Current) : Head;
+
         public static Transform HandAnchor(bool left)
         {
             if (Rig == null)
