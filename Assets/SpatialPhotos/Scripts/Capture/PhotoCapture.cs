@@ -125,6 +125,8 @@ namespace SpatialPhotos
                 UnityEngine.Android.Permission.RequestUserPermissions(missing);
             }
     #endif
+            // Room scan for snapping photos to surfaces; retried by the photos once the permission is granted
+            SurfaceSnap.LoadScene();
         }
 
         /// <summary>
