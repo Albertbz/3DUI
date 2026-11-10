@@ -8437,6 +8437,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: PhotoCaptureSystem
       objectReference: {fileID: 0}
+    - target: {fileID: 2904573672347791003, guid: d589df2db24654194ae951dd0b560bb2, type: 3}
+      propertyPath: style
+      value: 2
+      objectReference: {fileID: 0}
     - target: {fileID: 5945755196995904000, guid: d589df2db24654194ae951dd0b560bb2, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0
@@ -8490,6 +8494,14 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 1558171568366263903, guid: 93b77c8095ba54bd0b3fc349b068a3f6, type: 3}
+      propertyPath: gapRightOfPalm
+      value: 0.08
+      objectReference: {fileID: 0}
+    - target: {fileID: 1558171568366263903, guid: 93b77c8095ba54bd0b3fc349b068a3f6, type: 3}
+      propertyPath: heightAbovePalm
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 6185624590251033786, guid: 93b77c8095ba54bd0b3fc349b068a3f6, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0
