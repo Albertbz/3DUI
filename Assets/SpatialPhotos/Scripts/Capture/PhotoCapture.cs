@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Meta.XR;
 using UnityEngine;
 
@@ -30,12 +31,26 @@ namespace SpatialPhotos
         [Tooltip("Assumed distance to the real world behind the frame when the environment depth raycast has no answer")]
         [SerializeField] private float fallbackDepth = 2f;
         [SerializeField] private EnvironmentRaycastManager raycastManager; // Created when empty and supported
+        [Tooltip("Camera images kept while the frame is up, so the photo can come from just before the pinch release. About 5 MB each at 1280x960")]
+        [SerializeField] private int maxSnapshots = 10;
+        [SerializeField] private float snapshotSeconds = 0.4f;
 
         private static readonly int OverlayTexId = Shader.PropertyToID("_OverlayTex");
         private static readonly int HomographyId = Shader.PropertyToID("_Homography");
 
         private Material alphaOverMaterial;
         private Material warpMaterial;
+
+        /// <summary>A copy of one passthrough image with the camera pose it was taken from.</summary>
+        private struct Snapshot
+        {
+            public RenderTexture Image;
+            public Pose CameraPose;
+            public float Time;
+        }
+
+        private readonly List<Snapshot> snapshots = new List<Snapshot>(); // Oldest first
+        private bool recording;
 
         private void Awake()
         {
@@ -79,6 +94,7 @@ namespace SpatialPhotos
         private void OnDisable()
         {
             DominantEye.Changed -= MatchCameraToDominantEye;
+            EndRecording();
         }
 
         private void Start()
@@ -111,8 +127,48 @@ namespace SpatialPhotos
     #endif
         }
 
+        /// <summary>
+        /// Starts keeping recent camera images, so <see cref="Capture"/> can use one from before the moment it is
+        /// called. <see cref="ImageBoundaryBox"/> records while the frame is up.
+        /// </summary>
+        public void BeginRecording()
+        {
+            recording = true;
+        }
+
+        public void EndRecording()
+        {
+            recording = false;
+            foreach (Snapshot snapshot in snapshots)
+            {
+                RenderTexture.ReleaseTemporary(snapshot.Image);
+            }
+            snapshots.Clear();
+        }
+
+        private void LateUpdate()
+        {
+            if (!recording || passthroughCamera == null || !passthroughCamera.enabled || !passthroughCamera.IsPlaying ||
+                !passthroughCamera.IsUpdatedThisFrame)
+            {
+                return;
+            }
+
+            Texture source = passthroughCamera.GetTexture();
+            RenderTexture image = RenderTexture.GetTemporary(source.width, source.height, 0, RenderTextureFormat.ARGB32);
+            Graphics.Blit(source, image);
+            snapshots.Add(new Snapshot { Image = image, CameraPose = passthroughCamera.GetCameraPose(), Time = Time.time });
+
+            while (snapshots.Count > 1 && (snapshots.Count > maxSnapshots || snapshots[0].Time < Time.time - snapshotSeconds))
+            {
+                RenderTexture.ReleaseTemporary(snapshots[0].Image);
+                snapshots.RemoveAt(0);
+            }
+        }
+
         private void OnDestroy()
         {
+            EndRecording();
             Destroy(alphaOverMaterial);
             Destroy(warpMaterial);
         }
@@ -120,9 +176,11 @@ namespace SpatialPhotos
         /// <summary>
         /// Captures what <paramref name="eyePosition"/> sees through the given world-space frame corners and spawns a
         /// photo at <paramref name="framePose"/>. The frame must face the eye, as <see cref="ImageBoundaryBox"/> places it.
-        /// Corners go bottom-left, bottom-right, top-right, top-left as seen from the eye.
+        /// Corners go bottom-left, bottom-right, top-right, top-left as seen from the eye. The real world comes from
+        /// the camera image recorded at or before <paramref name="atTime"/> (a <see cref="Time.time"/>), or the live
+        /// image when nothing was recorded.
         /// </summary>
-        public void Capture(Vector3[] frameCornersWorld, Pose framePose, float width, float height, Vector3 eyePosition)
+        public void Capture(Vector3[] frameCornersWorld, Pose framePose, float width, float height, Vector3 eyePosition, float atTime)
         {
             float frameDistance = Vector3.Distance(eyePosition, framePose.position);
             float verticalFov = 2f * Mathf.Atan(height * 0.5f / frameDistance) * Mathf.Rad2Deg;
@@ -136,7 +194,15 @@ namespace SpatialPhotos
                 // The real world seen through the frame, taken as a plane at the scene's depth: each corner's ray from
                 // the eye hits that plane, and those hits are found in the passthrough image
                 float depth = SceneDepth(eyePosition, framePose.position, frameDistance);
+                Texture cameraImage = passthroughCamera.GetTexture();
                 Pose cameraPose = passthroughCamera.GetCameraPose();
+                string imageAge = "live image";
+                if (TryGetSnapshot(atTime, out Snapshot snapshot))
+                {
+                    cameraImage = snapshot.Image;
+                    cameraPose = snapshot.CameraPose;
+                    imageAge = $"image from {Time.time - snapshot.Time:F2} s ago";
+                }
                 Vector2Int resolution = passthroughCamera.CurrentResolution;
                 var quad = new Vector2[4];
                 for (int i = 0; i < 4; i++)
@@ -151,13 +217,13 @@ namespace SpatialPhotos
                     return;
                 }
 
-                baseImage = passthroughCamera.GetTexture();
+                baseImage = cameraImage;
                 warp = SquareToQuad(quad);
                 // As many pixels as the frame covers in the camera image
                 float leftEdge = Vector2.Scale(quad[3] - quad[0], resolution).magnitude;
                 float rightEdge = Vector2.Scale(quad[2] - quad[1], resolution).magnitude;
                 photoHeight = Mathf.RoundToInt(Mathf.Max(leftEdge, rightEdge));
-                Debug.Log($"PhotoCapture: {DominantEye.Current} eye, scene depth {depth:F2} m, frame at {frameDistance:F2} m.");
+                Debug.Log($"PhotoCapture: {DominantEye.Current} eye, scene depth {depth:F2} m, frame at {frameDistance:F2} m, {imageAge}.");
             }
             else
             {
@@ -217,6 +283,26 @@ namespace SpatialPhotos
 
             PhotoObject photoObject = Instantiate(photoPrefab, framePose.position, framePose.rotation);
             photoObject.Init(entry, photo, flash: true);
+        }
+
+        /// <summary>The newest recorded image from at or before <paramref name="time"/>, or the oldest one.</summary>
+        private bool TryGetSnapshot(float time, out Snapshot snapshot)
+        {
+            snapshot = default;
+            if (snapshots.Count == 0)
+            {
+                return false;
+            }
+            snapshot = snapshots[0];
+            for (int i = snapshots.Count - 1; i >= 0; i--)
+            {
+                if (snapshots[i].Time <= time)
+                {
+                    snapshot = snapshots[i];
+                    break;
+                }
+            }
+            return true;
         }
 
         /// <summary>

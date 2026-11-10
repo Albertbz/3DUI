@@ -1,4 +1,5 @@
-// Saves the current passthrough camera image with the last capture frame's outline in red, reprojected the way
+// Saves the current passthrough camera image (the photo itself used one from just before the release; the scene
+// is static in the simulator, so they match) with the last capture frame's outline in red, reprojected the way
 // PhotoCapture does it: rays from the dominant eye through the corners, hitting a plane at the scene depth
 // (__OUT__/shots/camera_with_crop.png). Compare it with the newest saved photo: they should show the same region.
 var pca = UnityEngine.Object.FindFirstObjectByType<Meta.XR.PassthroughCameraAccess>();
@@ -11,10 +12,13 @@ var img = new UnityEngine.Texture2D(src.width, src.height, UnityEngine.TextureFo
 img.ReadPixels(new UnityEngine.Rect(0, 0, src.width, src.height), 0, 0);
 UnityEngine.RenderTexture.active = null; UnityEngine.RenderTexture.ReleaseTemporary(rt);
 var box = UnityEngine.Object.FindFirstObjectByType<SpatialPhotos.ImageBoundaryBox>();
-var corners = (UnityEngine.Vector3[])typeof(SpatialPhotos.ImageBoundaryBox).GetField("lastCorners", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).GetValue(box);
 var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
-var eye = (UnityEngine.Vector3)typeof(SpatialPhotos.ImageBoundaryBox).GetField("lastEye", flags).GetValue(box);
-var pose = (UnityEngine.Pose)typeof(SpatialPhotos.ImageBoundaryBox).GetField("lastPose", flags).GetValue(box);
+var publicFlags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public;
+// The frame state the last release captured (from Release Lookback before it)
+var state = typeof(SpatialPhotos.ImageBoundaryBox).GetField("captured", flags).GetValue(box);
+var corners = (UnityEngine.Vector3[])state.GetType().GetProperty("Corners", publicFlags).GetValue(state);
+var eye = (UnityEngine.Vector3)state.GetType().GetField("Eye", publicFlags).GetValue(state);
+var pose = (UnityEngine.Pose)state.GetType().GetField("Pose", publicFlags).GetValue(state);
 var capture = UnityEngine.Object.FindFirstObjectByType<SpatialPhotos.PhotoCapture>();
 float frameDistance = UnityEngine.Vector3.Distance(eye, pose.position);
 float depth = (float)typeof(SpatialPhotos.PhotoCapture).GetMethod("SceneDepth", flags).Invoke(capture, new object[] { eye, pose.position, frameDistance });
