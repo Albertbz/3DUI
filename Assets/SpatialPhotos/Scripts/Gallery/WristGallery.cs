@@ -6,9 +6,10 @@ using UnityEngine;
 namespace SpatialPhotos
 {
     /// <summary>
-    /// Strip of photo thumbnails that floats above the left hand when the palm opens upward, turned toward the
-    /// eyes and kept upright. Drop the WristGallery prefab anywhere in the scene: at startup it finds the
-    /// OVRCameraRig's left hand anchor, hand, head and the photo library.
+    /// Strip of photo thumbnails that floats above the left hand when the palm opens upward, lying on the palm
+    /// like a tray and tilting with it, with both ends equally far from the eyes. Drop the WristGallery prefab
+    /// anywhere in the scene: at startup it finds the OVRCameraRig's left hand anchor, hand, head and the photo
+    /// library.
     /// </summary>
     public class WristGallery : MonoBehaviour
     {
@@ -67,6 +68,8 @@ namespace SpatialPhotos
         [Header("Open-palm detection")]
         [Tooltip("Palm normal in the wrist transform's local space. Tune this in play mode if the gallery shows on the wrong side.")]
         [SerializeField] private Vector3 palmNormalLocal = Vector3.down;
+        [Tooltip("Direction the fingers point in the wrist transform's local space; used only when the eyes are straight above the palm")]
+        [SerializeField] private Vector3 fingersLocal = Vector3.forward;
         [Tooltip("How far the palm must face up (dot with world up) to show the gallery, and below which it hides again")]
         [SerializeField] private float showThreshold = 0.7f;
         [SerializeField] private float hideThreshold = 0.5f;
@@ -148,7 +151,7 @@ namespace SpatialPhotos
                 return;
             }
 
-            // Placed in world space every frame, so it stays upright however the hand is turned
+            // Placed in world space every frame, relative to the hand
             transform.SetParent(null, true);
         }
 
@@ -159,14 +162,21 @@ namespace SpatialPhotos
                 return;
             }
 
-            // Above the palm centre, facing the eyes; visualRoot's -Z is the side people look at
-            // Beside the hand, to the viewer's right: the panel's left edge sits Gap Right Of Palm from the palm centre
-            Vector3 viewerRight = Vector3.ProjectOnPlane(head.right, Vector3.up).normalized;
-            Vector3 target = PalmCenter() + Vector3.up * heightAbovePalm + viewerRight * (gapRightOfPalm - panelMinX);
-            Vector3 toGallery = Vector3.ProjectOnPlane(target - head.position, Vector3.up).sqrMagnitude > 1e-6f
-                ? target - head.position
-                : head.forward;
-            Quaternion rotation = Quaternion.LookRotation(toGallery, Vector3.up);
+            // Lying on the hand like a tray: visualRoot's -Z (the side people look at) faces out of the palm. Within
+            // the palm's plane it is turned so its top points away from the eyes, keeping both ends equally far
+            // away however the fingers point; turning the head alone doesn't move it
+            Vector3 palmCenter = PalmCenter();
+            Vector3 palmNormal = wrist.TransformDirection(palmNormalLocal).normalized;
+            Quaternion rotation = wrist.rotation * Quaternion.LookRotation(-palmNormalLocal, fingersLocal);
+            // Where the panel's middle lands depends on the turn, so settle it in a few passes
+            for (int i = 0; i < 3; i++)
+            {
+                Vector3 panelMiddle = TrayTarget(palmCenter, rotation) + rotation * Vector3.right * ((panelMinX + panelMaxX) * 0.5f);
+                Vector3 away = Vector3.ProjectOnPlane(panelMiddle - head.position, palmNormal);
+                if (away.sqrMagnitude < 1e-6f) break;
+                rotation = Quaternion.LookRotation(-palmNormal, away);
+            }
+            Vector3 target = TrayTarget(palmCenter, rotation);
 
             // Snap into place when appearing, then follow smoothly to hide tracking jitter
             if (visibility <= 0f)
@@ -177,6 +187,13 @@ namespace SpatialPhotos
             float t = 1f - Mathf.Exp(-followSmoothing * Time.deltaTime);
             transform.SetPositionAndRotation(
                 Vector3.Lerp(transform.position, target, t), Quaternion.Slerp(transform.rotation, rotation, t));
+        }
+
+        // Above the palm centre along the palm normal; the panel's left edge sits Gap Right Of Palm from the palm
+        // centre, toward the hand's thumb side
+        private Vector3 TrayTarget(Vector3 palmCenter, Quaternion rotation)
+        {
+            return palmCenter + rotation * new Vector3(gapRightOfPalm - panelMinX, 0f, -heightAbovePalm);
         }
 
         // Each hand hovers one interactor at a time and poke goes first, so a finger touching the strip would keep
