@@ -13,6 +13,10 @@ namespace SpatialPhotos
         [SerializeField] private float minCaptureSize = 0.05f; // 5 cm, ignore accidental tiny frames
         [Tooltip("How long before the pinch release the photo is taken, so it shows the closed pinch rather than opening fingers")]
         [SerializeField] private float releaseLookback = 0.15f;
+        [Tooltip("Keep the frame inside what the passthrough cameras see, so photos have no stretched edges")]
+        [SerializeField] private bool limitToCameraView = true;
+        [Tooltip("Points checked along each frame edge against the camera images")]
+        [SerializeField] private int coverageSamplesPerEdge = 5;
 
         /// <summary>The frame as it was at one moment while pinching.</summary>
         private struct FrameState
@@ -141,9 +145,10 @@ namespace SpatialPhotos
             Vector3 center = (cornerA + cornerB) * 0.5f;
             frameTransform.position = center;
 
-            // 2. Face the eye that sights through the frame: the dominant one, or the head's center while calibrating
+            // 2. Face the head's center, which turns steadily with the head. The photo is still what the eye that
+            //    sights through the frame sees: the dominant one, or the head's center while calibrating
             Transform eye = calibration.IsActive ? head.transform : XRRig.DominantEyeTransform;
-            Vector3 forward = (center - eye.position).normalized;
+            Vector3 forward = (center - head.transform.position).normalized;
             Quaternion frameRotation = Quaternion.LookRotation(forward, head.transform.up);
             frameTransform.rotation = frameRotation;
 
@@ -153,9 +158,14 @@ namespace SpatialPhotos
 
             float width = Mathf.Abs(diagonalLocal.x);
             float height = Mathf.Abs(diagonalLocal.y);
+            if (limitToCameraView && !calibration.IsActive && photoCapture != null)
+            {
+                FitToCameraView(center, frameRotation, eye.position, ref width, ref height);
+            }
 
-            // 4. Update the prefab's internal edge positions/scales
-            boundaryFrame.SetDimensions(width, height);
+            // 4. Update the prefab's internal edge positions/scales. A frame squeezed to nothing by the camera view still
+            //    shows, at the smallest size and tinted as too small
+            boundaryFrame.SetDimensions(Mathf.Max(width, minCaptureSize), Mathf.Max(height, minCaptureSize));
             boundaryFrame.SetCapturable(width >= minCaptureSize && height >= minCaptureSize);
 
             // 5. Remember the frame so it can be captured on release
@@ -178,6 +188,63 @@ namespace SpatialPhotos
             {
                 history.RemoveAt(0);
             }
+        }
+
+        /// <summary>
+        /// Shrinks the frame, kept centered between the hands, until the cameras see everything behind it: each side
+        /// first stops where it leaves their view through the frame's center, then both shrink together if a corner
+        /// is still outside.
+        /// </summary>
+        private void FitToCameraView(Vector3 center, Quaternion rotation, Vector3 eyePosition, ref float width, ref float height)
+        {
+            PhotoCapture.Coverage coverage = photoCapture.BeginCoverage(eyePosition, center);
+            if (coverage == null || Sees(coverage, center, rotation, width, height))
+            {
+                return;
+            }
+
+            const float thin = 0.001f;
+            float fullWidth = width, fullHeight = height;
+            float fittedWidth = LargestFit(1f, s => Sees(coverage, center, rotation, fullWidth * s, thin)) * fullWidth;
+            float fittedHeight = LargestFit(1f, s => Sees(coverage, center, rotation, thin, fullHeight * s)) * fullHeight;
+            float scale = LargestFit(1f, s => Sees(coverage, center, rotation, fittedWidth * s, fittedHeight * s));
+            width = fittedWidth * scale;
+            height = fittedHeight * scale;
+        }
+
+        /// <summary>The largest scale in 0..<paramref name="max"/> for which <paramref name="fits"/> holds, by bisection.</summary>
+        private static float LargestFit(float max, System.Func<float, bool> fits)
+        {
+            if (fits(max))
+            {
+                return max;
+            }
+            float low = 0f, high = max;
+            for (int i = 0; i < 10; i++)
+            {
+                float middle = (low + high) * 0.5f;
+                if (fits(middle)) low = middle;
+                else high = middle;
+            }
+            return low;
+        }
+
+        private bool Sees(PhotoCapture.Coverage coverage, Vector3 center, Quaternion rotation, float width, float height)
+        {
+            Vector3 right = rotation * Vector3.right * (width * 0.5f);
+            Vector3 up = rotation * Vector3.up * (height * 0.5f);
+            Vector3 corner0 = center - right - up, corner1 = center + right - up, corner2 = center + right + up, corner3 = center - right + up;
+            int steps = Mathf.Max(1, coverageSamplesPerEdge - 1);
+            for (int i = 0; i < steps; i++)
+            {
+                float t = i / (float)steps;
+                if (!coverage.Sees(Vector3.Lerp(corner0, corner1, t)) || !coverage.Sees(Vector3.Lerp(corner1, corner2, t)) ||
+                    !coverage.Sees(Vector3.Lerp(corner2, corner3, t)) || !coverage.Sees(Vector3.Lerp(corner3, corner0, t)))
+                {
+                    return false;
+                }
+            }
+            return true;
         }
     }
 }

@@ -7,7 +7,7 @@ namespace SpatialPhotos
 
     /// <summary>
     /// The eye people sight through when framing a photo. Measured by <see cref="DominantEyeCalibration"/> and
-    /// saved in PlayerPrefs; the frame faces this eye and photos are taken from its viewpoint.
+    /// saved in PlayerPrefs; photos are taken from its viewpoint.
     /// </summary>
     public static class DominantEye
     {

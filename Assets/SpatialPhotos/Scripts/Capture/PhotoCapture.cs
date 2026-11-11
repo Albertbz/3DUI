@@ -9,6 +9,7 @@ namespace SpatialPhotos
     {
         // Empty scene references (passthrough camera, head camera, library, shutter sound) are found at startup
         [Header("Sources")]
+        [Tooltip("One of the two passthrough cameras; the other side is created at startup when the scene has only one")]
         [SerializeField] private PassthroughCameraAccess passthroughCamera;
         [SerializeField] private Camera headCamera;      // Fallback when the passthrough camera is unavailable
         [SerializeField] private Camera captureCamera;   // Disabled camera used to render the virtual layer; created when empty
@@ -31,12 +32,17 @@ namespace SpatialPhotos
         [Tooltip("Assumed distance to the real world behind the frame when the environment depth raycast has no answer")]
         [SerializeField] private float fallbackDepth = 2f;
         [SerializeField] private EnvironmentRaycastManager raycastManager; // Created when empty and supported
-        [Tooltip("Camera images kept while the frame is up, so the photo can come from just before the pinch release. About 5 MB each at 1280x960")]
+        [Tooltip("Camera images kept while the frame is up, so the photo can come from just before the pinch release. About 6.5 MB each at 1280x1280, for each of the two cameras")]
         [SerializeField] private int maxSnapshots = 10;
         [SerializeField] private float snapshotSeconds = 0.4f;
+        [Tooltip("How far past the camera images' edges the frame may reach, as a share of the image (a little edge stretch)")]
+        [SerializeField] private float coverageAllowance = 0.02f;
 
         private static readonly int OverlayTexId = Shader.PropertyToID("_OverlayTex");
         private static readonly int HomographyId = Shader.PropertyToID("_Homography");
+        private static readonly int SecondTexId = Shader.PropertyToID("_SecondTex");
+        private static readonly int SecondHomographyId = Shader.PropertyToID("_SecondHomography");
+        private static readonly int UseSecondId = Shader.PropertyToID("_UseSecond");
 
         private Material alphaOverMaterial;
         private Material warpMaterial;
@@ -49,8 +55,23 @@ namespace SpatialPhotos
             public float Time;
         }
 
-        private readonly List<Snapshot> snapshots = new List<Snapshot>(); // Oldest first
+        /// <summary>One passthrough camera with its recent images.</summary>
+        private class Feed
+        {
+            public PassthroughCameraAccess Camera;
+            public readonly List<Snapshot> Snapshots = new List<Snapshot>(); // Oldest first
+
+            public bool IsPlaying => Camera != null && Camera.enabled && Camera.IsPlaying;
+        }
+
+        // Both cameras: the frame often reaches past the edge of the one on the dominant eye's side, and the other
+        // one fills in what it misses
+        private readonly Feed leftFeed = new Feed();
+        private readonly Feed rightFeed = new Feed();
         private bool recording;
+
+        private Feed DominantFeed => DominantEye.Current == Eye.Left ? leftFeed : rightFeed;
+        private Feed OtherFeed => DominantEye.Current == Eye.Left ? rightFeed : leftFeed;
 
         private void Awake()
         {
@@ -86,14 +107,8 @@ namespace SpatialPhotos
             }
         }
 
-        private void OnEnable()
-        {
-            DominantEye.Changed += MatchCameraToDominantEye;
-        }
-
         private void OnDisable()
         {
-            DominantEye.Changed -= MatchCameraToDominantEye;
             EndRecording();
         }
 
@@ -104,7 +119,10 @@ namespace SpatialPhotos
             {
                 Debug.LogWarning("PhotoCapture: no PassthroughCameraAccess in the scene, photos will contain virtual content only.", this);
             }
-            MatchCameraToDominantEye();
+            else
+            {
+                SetUpFeeds();
+            }
 
             if (raycastManager == null) raycastManager = FindFirstObjectByType<EnvironmentRaycastManager>();
             if (raycastManager == null && EnvironmentRaycastManager.IsSupported)
@@ -141,25 +159,38 @@ namespace SpatialPhotos
         public void EndRecording()
         {
             recording = false;
-            foreach (Snapshot snapshot in snapshots)
+            foreach (Feed feed in new[] { leftFeed, rightFeed })
             {
-                RenderTexture.ReleaseTemporary(snapshot.Image);
+                foreach (Snapshot snapshot in feed.Snapshots)
+                {
+                    RenderTexture.ReleaseTemporary(snapshot.Image);
+                }
+                feed.Snapshots.Clear();
             }
-            snapshots.Clear();
         }
 
         private void LateUpdate()
         {
-            if (!recording || passthroughCamera == null || !passthroughCamera.enabled || !passthroughCamera.IsPlaying ||
-                !passthroughCamera.IsUpdatedThisFrame)
+            if (!recording)
+            {
+                return;
+            }
+            Record(leftFeed);
+            Record(rightFeed);
+        }
+
+        private void Record(Feed feed)
+        {
+            if (!feed.IsPlaying || !feed.Camera.IsUpdatedThisFrame)
             {
                 return;
             }
 
-            Texture source = passthroughCamera.GetTexture();
+            Texture source = feed.Camera.GetTexture();
             RenderTexture image = RenderTexture.GetTemporary(source.width, source.height, 0, RenderTextureFormat.ARGB32);
             Graphics.Blit(source, image);
-            snapshots.Add(new Snapshot { Image = image, CameraPose = passthroughCamera.GetCameraPose(), Time = Time.time });
+            List<Snapshot> snapshots = feed.Snapshots;
+            snapshots.Add(new Snapshot { Image = image, CameraPose = feed.Camera.GetCameraPose(), Time = Time.time });
 
             while (snapshots.Count > 1 && (snapshots.Count > maxSnapshots || snapshots[0].Time < Time.time - snapshotSeconds))
             {
@@ -177,8 +208,8 @@ namespace SpatialPhotos
 
         /// <summary>
         /// Captures what <paramref name="eyePosition"/> sees through the given world-space frame corners and spawns a
-        /// photo at <paramref name="framePose"/>. The frame must face the eye, as <see cref="ImageBoundaryBox"/> places it.
-        /// Corners go bottom-left, bottom-right, top-right, top-left as seen from the eye. The real world comes from
+        /// photo at <paramref name="framePose"/>. The frame may be turned away from the eye: <see cref="ImageBoundaryBox"/>
+        /// faces it toward the head's center while the photo comes from the dominant eye. Corners go bottom-left, bottom-right, top-right, top-left as seen from the eye. The real world comes from
         /// the camera image recorded at or before <paramref name="atTime"/> (a <see cref="Time.time"/>), or the live
         /// image when nothing was recorded.
         /// </summary>
@@ -191,41 +222,52 @@ namespace SpatialPhotos
             Matrix4x4 warp;
             int photoHeight;
 
-            if (passthroughCamera != null && passthroughCamera.enabled && passthroughCamera.IsPlaying)
+            // The dominant eye's side gives the image; the other camera, when playing, fills in past its edges
+            Feed primary = DominantFeed.IsPlaying ? DominantFeed : OtherFeed;
+            Feed secondary = primary == DominantFeed && OtherFeed.IsPlaying ? OtherFeed : null;
+            warpMaterial.SetFloat(UseSecondId, 0f);
+
+            if (primary.IsPlaying)
             {
                 // The real world seen through the frame, taken as a plane at the scene's depth: each corner's ray from
                 // the eye hits that plane, and those hits are found in the passthrough image
                 float depth = SceneDepth(eyePosition, framePose.position, frameDistance);
-                Texture cameraImage = passthroughCamera.GetTexture();
-                Pose cameraPose = passthroughCamera.GetCameraPose();
-                string imageAge = "live image";
-                if (TryGetSnapshot(atTime, out Snapshot snapshot))
-                {
-                    cameraImage = snapshot.Image;
-                    cameraPose = snapshot.CameraPose;
-                    imageAge = $"image from {Time.time - snapshot.Time:F2} s ago";
-                }
-                Vector2Int resolution = passthroughCamera.CurrentResolution;
-                var quad = new Vector2[4];
+                var sceneCorners = new Vector3[4];
                 for (int i = 0; i < 4; i++)
                 {
-                    Vector3 onScene = eyePosition + (frameCornersWorld[i] - eyePosition) * (depth / frameDistance);
-                    quad[i] = passthroughCamera.WorldToViewportPoint(onScene, cameraPose);
+                    sceneCorners[i] = eyePosition + (frameCornersWorld[i] - eyePosition) * (depth / frameDistance);
                 }
 
-                if (!OverlapsViewport(quad))
+                Vector2[] quad = FrameInImage(primary, sceneCorners, atTime, out baseImage, out string imageAge);
+                bool inPrimary = OverlapsViewport(quad);
+                bool inSecondary = false;
+                if (secondary != null)
+                {
+                    Vector2[] secondQuad = FrameInImage(secondary, sceneCorners, atTime, out Texture secondImage, out _);
+                    inSecondary = OverlapsViewport(secondQuad);
+                    if (inSecondary)
+                    {
+                        warpMaterial.SetTexture(SecondTexId, secondImage);
+                        warpMaterial.SetMatrix(SecondHomographyId, SquareToQuad(secondQuad));
+                        warpMaterial.SetFloat(UseSecondId, 1f);
+                    }
+                }
+
+                if (!inPrimary && !inSecondary)
                 {
                     Debug.LogWarning("PhotoCapture: frame is outside the camera view, nothing captured.");
                     return;
                 }
 
-                baseImage = cameraImage;
+                Vector2Int resolution = primary.Camera.CurrentResolution;
                 warp = SquareToQuad(quad);
                 // As many pixels as the frame covers in the camera image
                 float leftEdge = Vector2.Scale(quad[3] - quad[0], resolution).magnitude;
                 float rightEdge = Vector2.Scale(quad[2] - quad[1], resolution).magnitude;
                 photoHeight = Mathf.RoundToInt(Mathf.Max(leftEdge, rightEdge));
-                Debug.Log($"PhotoCapture: {DominantEye.Current} eye, scene depth {depth:F2} m, frame at {frameDistance:F2} m, {imageAge}.");
+                Debug.Log($"PhotoCapture: {DominantEye.Current} eye, {primary.Camera.CameraPosition} camera" +
+                          (inSecondary ? $" filled in by {secondary.Camera.CameraPosition}" : "") +
+                          $", scene depth {depth:F2} m, frame at {frameDistance:F2} m, {imageAge}.");
             }
             else
             {
@@ -235,20 +277,20 @@ namespace SpatialPhotos
                 photoHeight = Mathf.RoundToInt(fallbackResolution.y * verticalFov / headCamera.fieldOfView);
             }
 
-            photoHeight = Mathf.Clamp(photoHeight, 1, maxPhotoSize);
-            int photoWidth = Mathf.Clamp(Mathf.RoundToInt(photoHeight * width / height), 1, maxPhotoSize);
+            // Keep the frame's aspect when the longer side hits the size limit
+            float scale = Mathf.Min(1f, maxPhotoSize / (float)photoHeight, maxPhotoSize / (photoHeight * width / height));
+            int photoWidth = Mathf.Clamp(Mathf.RoundToInt(photoHeight * scale * width / height), 1, maxPhotoSize);
+            photoHeight = Mathf.Clamp(Mathf.RoundToInt(photoHeight * scale), 1, maxPhotoSize);
 
             RenderTexture virtualLayer = RenderTexture.GetTemporary(photoWidth, photoHeight, 24, RenderTextureFormat.ARGB32);
             RenderTexture realLayer = RenderTexture.GetTemporary(photoWidth, photoHeight, 0, RenderTextureFormat.ARGB32);
 
-            // 1. Render the virtual scene from the eye through the frame onto a transparent background. The frame
-            //    faces the eye, so its edges are a centered frustum
+            // 1. Render the virtual scene from the eye through the frame onto a transparent background. The camera
+            //    looks along the frame's normal, so the frame is an off-center window on its image plane
             captureCamera.transform.SetPositionAndRotation(eyePosition, framePose.rotation);
-            captureCamera.ResetProjectionMatrix();
-            captureCamera.fieldOfView = verticalFov;
-            captureCamera.aspect = width / height;
             captureCamera.nearClipPlane = nearClip;
             captureCamera.farClipPlane = farClip;
+            captureCamera.projectionMatrix = FrustumThrough(frameCornersWorld[0], frameCornersWorld[2], eyePosition, framePose.rotation);
             captureCamera.cullingMask = captureCullingMask;
             captureCamera.clearFlags = CameraClearFlags.SolidColor;
             captureCamera.backgroundColor = Color.clear;
@@ -287,8 +329,32 @@ namespace SpatialPhotos
             photoObject.Init(entry, photo, flash: true);
         }
 
+        /// <summary>
+        /// Where <paramref name="sceneCorners"/> appear in the feed's image from <paramref name="atTime"/> (the live
+        /// image when nothing was recorded), in viewport coordinates.
+        /// </summary>
+        private static Vector2[] FrameInImage(Feed feed, Vector3[] sceneCorners, float atTime, out Texture image, out string imageAge)
+        {
+            image = feed.Camera.GetTexture();
+            Pose cameraPose = feed.Camera.GetCameraPose();
+            imageAge = "live image";
+            if (TryGetSnapshot(feed.Snapshots, atTime, out Snapshot snapshot))
+            {
+                image = snapshot.Image;
+                cameraPose = snapshot.CameraPose;
+                imageAge = $"image from {Time.time - snapshot.Time:F2} s ago";
+            }
+
+            var quad = new Vector2[4];
+            for (int i = 0; i < 4; i++)
+            {
+                quad[i] = feed.Camera.WorldToViewportPoint(sceneCorners[i], cameraPose);
+            }
+            return quad;
+        }
+
         /// <summary>The newest recorded image from at or before <paramref name="time"/>, or the oldest one.</summary>
-        private bool TryGetSnapshot(float time, out Snapshot snapshot)
+        private static bool TryGetSnapshot(List<Snapshot> snapshots, float time, out Snapshot snapshot)
         {
             snapshot = default;
             if (snapshots.Count == 0)
@@ -323,6 +389,80 @@ namespace SpatialPhotos
                 }
             }
             return Mathf.Max(depth, frameDistance);
+        }
+
+        /// <summary>
+        /// Projection from <paramref name="eyePosition"/>, looking along <paramref name="rotation"/> (the frame's), whose
+        /// edges pass through the frame's bottom-left and top-right corners.
+        /// </summary>
+        private Matrix4x4 FrustumThrough(Vector3 bottomLeft, Vector3 topRight, Vector3 eyePosition, Quaternion rotation)
+        {
+            Quaternion toLocal = Quaternion.Inverse(rotation);
+            Vector3 min = toLocal * (bottomLeft - eyePosition);
+            Vector3 max = toLocal * (topRight - eyePosition);
+            float near = nearClip;
+            return Matrix4x4.Frustum(min.x / min.z * near, max.x / max.z * near, min.y / min.z * near, max.y / max.z * near,
+                near, farClip);
+        }
+
+        /// <summary>
+        /// What the passthrough cameras can see right now, as seen from one eye through a frame, so the frame can be kept
+        /// inside it. Make one with <see cref="BeginCoverage"/>.
+        /// </summary>
+        public class Coverage
+        {
+            internal readonly List<(PassthroughCameraAccess Camera, Pose Pose)> Cameras = new List<(PassthroughCameraAccess, Pose)>();
+            internal Vector3 Eye;
+            internal float DepthScale;
+            internal float Allowance;
+
+            /// <summary>True when the real world behind <paramref name="framePoint"/> is in at least one camera image.</summary>
+            public bool Sees(Vector3 framePoint)
+            {
+                Vector3 onScene = Eye + (framePoint - Eye) * DepthScale;
+                foreach ((PassthroughCameraAccess camera, Pose pose) in Cameras)
+                {
+                    if (Vector3.Dot(onScene - pose.position, pose.forward) <= 0f)
+                    {
+                        continue;
+                    }
+                    Vector2 point = camera.WorldToViewportPoint(onScene, pose);
+                    if (point.x >= -Allowance && point.x <= 1f + Allowance && point.y >= -Allowance && point.y <= 1f + Allowance)
+                    {
+                        return true;
+                    }
+                }
+                return false;
+            }
+        }
+
+        private readonly Coverage coverage = new Coverage();
+
+        /// <summary>
+        /// Sets up a check of what the cameras see from <paramref name="eyePosition"/> through a frame centered at
+        /// <paramref name="frameCenter"/>, at the same scene depth as <see cref="Capture"/>. Returns null when no camera is
+        /// playing, so there is nothing to limit the frame to.
+        /// </summary>
+        public Coverage BeginCoverage(Vector3 eyePosition, Vector3 frameCenter)
+        {
+            coverage.Cameras.Clear();
+            foreach (Feed feed in new[] { leftFeed, rightFeed })
+            {
+                if (feed.IsPlaying)
+                {
+                    coverage.Cameras.Add((feed.Camera, feed.Camera.GetCameraPose()));
+                }
+            }
+            if (coverage.Cameras.Count == 0)
+            {
+                return null;
+            }
+
+            float frameDistance = Vector3.Distance(eyePosition, frameCenter);
+            coverage.Eye = eyePosition;
+            coverage.DepthScale = SceneDepth(eyePosition, frameCenter, frameDistance) / frameDistance;
+            coverage.Allowance = coverageAllowance;
+            return coverage;
         }
 
         private static bool OverlapsViewport(Vector2[] quad)
@@ -362,27 +502,37 @@ namespace SpatialPhotos
             return matrix;
         }
 
-        // Passthrough comes from the camera on the dominant eye's side, the closest to that eye's view.
-        // PassthroughCameraAccess picks its camera when enabled, so restart it to switch
-        private void MatchCameraToDominantEye()
+        // Finds or creates a camera for each side. Both run all the time, so a change of dominant eye needs no restart
+        private void SetUpFeeds()
         {
-            if (passthroughCamera == null)
+            var cameras = new List<PassthroughCameraAccess> { passthroughCamera };
+            cameras.AddRange(FindObjectsByType<PassthroughCameraAccess>(FindObjectsSortMode.None));
+            foreach (PassthroughCameraAccess camera in cameras)
+            {
+                Feed feed = camera.CameraPosition == PassthroughCameraAccess.CameraPositionType.Left ? leftFeed : rightFeed;
+                if (feed.Camera == null) feed.Camera = camera;
+            }
+
+            Feed missing = leftFeed.Camera == null ? leftFeed : rightFeed.Camera == null ? rightFeed : null;
+            if (missing == null)
             {
                 return;
             }
 
-            var side = DominantEye.Current == Eye.Left
+            // The camera picks its side when enabled, so set it up on an inactive object first
+            PassthroughCameraAccess existing = (missing == leftFeed ? rightFeed : leftFeed).Camera;
+            var cameraObject = new GameObject("PassthroughCamera" + (missing == leftFeed ? "Left" : "Right"));
+            cameraObject.SetActive(false);
+            cameraObject.transform.SetParent(existing.transform.parent, false);
+            missing.Camera = cameraObject.AddComponent<PassthroughCameraAccess>();
+            missing.Camera.enabled = false; // MaxFramerate can only be set while disabled
+            missing.Camera.CameraPosition = missing == leftFeed
                 ? PassthroughCameraAccess.CameraPositionType.Left
                 : PassthroughCameraAccess.CameraPositionType.Right;
-            if (passthroughCamera.CameraPosition == side)
-            {
-                return;
-            }
-
-            bool wasEnabled = passthroughCamera.enabled;
-            passthroughCamera.enabled = false;
-            passthroughCamera.CameraPosition = side;
-            passthroughCamera.enabled = wasEnabled;
+            missing.Camera.RequestedResolution = existing.RequestedResolution;
+            missing.Camera.MaxFramerate = existing.MaxFramerate;
+            cameraObject.SetActive(true);
+            missing.Camera.enabled = existing.enabled;
         }
     }
 }
