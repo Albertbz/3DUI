@@ -6,10 +6,9 @@ using UnityEngine;
 namespace SpatialPhotos
 {
     /// <summary>
-    /// Strip of photo thumbnails that floats above the left hand when the palm opens upward, lying on the palm
-    /// like a tray and tilting with it, with both ends equally far from the eyes. Drop the WristGallery prefab
-    /// anywhere in the scene: at startup it finds the OVRCameraRig's left hand anchor, hand, head and the photo
-    /// library.
+    /// Strip of photo thumbnails that appears beside the left hand when the palm opens upward, to its right as seen
+    /// from the head, upright and facing the head. Drop the WristGallery prefab anywhere in the scene: at startup it
+    /// finds the OVRCameraRig's left hand anchor, hand, head and the photo library.
     /// </summary>
     public class WristGallery : MonoBehaviour
     {
@@ -63,13 +62,13 @@ namespace SpatialPhotos
         [SerializeField] private float heightAbovePalm = 0.12f;     // To the middle of the thumbnail strip
         [Tooltip("Space between the palm centre and the gallery's left edge, toward the viewer's right, so the hand doesn't cover what you're selecting")]
         [SerializeField] private float gapRightOfPalm = 0.04f;
+        [Tooltip("How much nearer the eyes than the palm the gallery's middle sits")]
+        [SerializeField] private float closerThanPalm = 0.03f;
         [SerializeField] private float followSmoothing = 25f;      // Higher follows the hand more tightly
 
         [Header("Open-palm detection")]
         [Tooltip("Palm normal in the wrist transform's local space. Tune this in play mode if the gallery shows on the wrong side.")]
         [SerializeField] private Vector3 palmNormalLocal = Vector3.down;
-        [Tooltip("Direction the fingers point in the wrist transform's local space; used only when the eyes are straight above the palm")]
-        [SerializeField] private Vector3 fingersLocal = Vector3.forward;
         [Tooltip("How far the palm must face up (dot with world up) to show the gallery, and below which it hides again")]
         [SerializeField] private float showThreshold = 0.7f;
         [SerializeField] private float hideThreshold = 0.5f;
@@ -151,7 +150,7 @@ namespace SpatialPhotos
                 return;
             }
 
-            // Placed in world space every frame, relative to the hand
+            // Placed in world space every frame, so it stays upright however the hand is turned
             transform.SetParent(null, true);
         }
 
@@ -162,21 +161,25 @@ namespace SpatialPhotos
                 return;
             }
 
-            // Lying on the hand like a tray: visualRoot's -Z (the side people look at) faces out of the palm. Within
-            // the palm's plane it is turned so its top points away from the eyes, keeping both ends equally far
-            // away however the fingers point; turning the head alone doesn't move it
+            // To the right of the hand as seen from the head, upright and facing the head. Only the head's position
+            // is used, never where it looks, so turning the head leaves the gallery where it is. visualRoot's -Z is
+            // the side people look at; the panel's left edge sits Gap Right Of Palm from the palm centre
             Vector3 palmCenter = PalmCenter();
-            Vector3 palmNormal = wrist.TransformDirection(palmNormalLocal).normalized;
-            Quaternion rotation = wrist.rotation * Quaternion.LookRotation(-palmNormalLocal, fingersLocal);
-            // Where the panel's middle lands depends on the turn, so settle it in a few passes
-            for (int i = 0; i < 3; i++)
-            {
-                Vector3 panelMiddle = TrayTarget(palmCenter, rotation) + rotation * Vector3.right * ((panelMinX + panelMaxX) * 0.5f);
-                Vector3 away = Vector3.ProjectOnPlane(panelMiddle - head.position, palmNormal);
-                if (away.sqrMagnitude < 1e-6f) break;
-                rotation = Quaternion.LookRotation(-palmNormal, away);
-            }
-            Vector3 target = TrayTarget(palmCenter, rotation);
+            Vector3 toPalm = Vector3.ProjectOnPlane(palmCenter - head.position, Vector3.up);
+            if (toPalm.sqrMagnitude < 1e-6f) toPalm = Vector3.ProjectOnPlane(head.forward, Vector3.up); // Palm right under the eyes
+            float palmDistance = Mathf.Max(toPalm.magnitude, 0.1f);
+
+            // Swung around the head rather than slid sideways, so the panel's middle is as close as the palm (less
+            // Closer Than Palm) instead of drifting behind the hand
+            float swing = Mathf.Min((gapRightOfPalm + (panelMaxX - panelMinX) * 0.5f) / palmDistance, Mathf.PI * 0.5f);
+            Vector3 toMiddle = Quaternion.AngleAxis(swing * Mathf.Rad2Deg, Vector3.up) * toPalm.normalized
+                * Mathf.Max(palmDistance - closerThanPalm, 0.1f);
+            Vector3 panelMiddle = head.position + toMiddle
+                + Vector3.up * (palmCenter.y - head.position.y + heightAbovePalm);
+
+            // Aim the panel's middle at the head, so both ends are equally far away
+            Quaternion rotation = Quaternion.LookRotation(panelMiddle - head.position, Vector3.up);
+            Vector3 target = panelMiddle - rotation * Vector3.right * ((panelMinX + panelMaxX) * 0.5f);
 
             // Snap into place when appearing, then follow smoothly to hide tracking jitter
             if (visibility <= 0f)
@@ -187,13 +190,6 @@ namespace SpatialPhotos
             float t = 1f - Mathf.Exp(-followSmoothing * Time.deltaTime);
             transform.SetPositionAndRotation(
                 Vector3.Lerp(transform.position, target, t), Quaternion.Slerp(transform.rotation, rotation, t));
-        }
-
-        // Above the palm centre along the palm normal; the panel's left edge sits Gap Right Of Palm from the palm
-        // centre, toward the hand's thumb side
-        private Vector3 TrayTarget(Vector3 palmCenter, Quaternion rotation)
-        {
-            return palmCenter + rotation * new Vector3(gapRightOfPalm - panelMinX, 0f, -heightAbovePalm);
         }
 
         // Each hand hovers one interactor at a time and poke goes first, so a finger touching the strip would keep
