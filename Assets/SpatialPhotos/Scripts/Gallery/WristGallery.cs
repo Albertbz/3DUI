@@ -6,9 +6,9 @@ using UnityEngine;
 namespace SpatialPhotos
 {
     /// <summary>
-    /// Strip of photo thumbnails that floats above the left hand when the palm opens upward, turned toward the
-    /// eyes and kept upright. Drop the WristGallery prefab anywhere in the scene: at startup it finds the
-    /// OVRCameraRig's left hand anchor, hand, head and the photo library.
+    /// Strip of photo thumbnails that appears beside the left hand when the palm opens upward, to its right as seen
+    /// from the head, upright and facing the head. Drop the WristGallery prefab anywhere in the scene: at startup it
+    /// finds the OVRCameraRig's left hand anchor, hand, head and the photo library.
     /// </summary>
     public class WristGallery : MonoBehaviour
     {
@@ -62,6 +62,8 @@ namespace SpatialPhotos
         [SerializeField] private float heightAbovePalm = 0.12f;     // To the middle of the thumbnail strip
         [Tooltip("Space between the palm centre and the gallery's left edge, toward the viewer's right, so the hand doesn't cover what you're selecting")]
         [SerializeField] private float gapRightOfPalm = 0.04f;
+        [Tooltip("How much nearer the eyes than the palm the gallery's middle sits")]
+        [SerializeField] private float closerThanPalm = 0.03f;
         [SerializeField] private float followSmoothing = 25f;      // Higher follows the hand more tightly
 
         [Header("Open-palm detection")]
@@ -159,14 +161,25 @@ namespace SpatialPhotos
                 return;
             }
 
-            // Above the palm centre, facing the eyes; visualRoot's -Z is the side people look at
-            // Beside the hand, to the viewer's right: the panel's left edge sits Gap Right Of Palm from the palm centre
-            Vector3 viewerRight = Vector3.ProjectOnPlane(head.right, Vector3.up).normalized;
-            Vector3 target = PalmCenter() + Vector3.up * heightAbovePalm + viewerRight * (gapRightOfPalm - panelMinX);
-            Vector3 toGallery = Vector3.ProjectOnPlane(target - head.position, Vector3.up).sqrMagnitude > 1e-6f
-                ? target - head.position
-                : head.forward;
-            Quaternion rotation = Quaternion.LookRotation(toGallery, Vector3.up);
+            // To the right of the hand as seen from the head, upright and facing the head. Only the head's position
+            // is used, never where it looks, so turning the head leaves the gallery where it is. visualRoot's -Z is
+            // the side people look at; the panel's left edge sits Gap Right Of Palm from the palm centre
+            Vector3 palmCenter = PalmCenter();
+            Vector3 toPalm = Vector3.ProjectOnPlane(palmCenter - head.position, Vector3.up);
+            if (toPalm.sqrMagnitude < 1e-6f) toPalm = Vector3.ProjectOnPlane(head.forward, Vector3.up); // Palm right under the eyes
+            float palmDistance = Mathf.Max(toPalm.magnitude, 0.1f);
+
+            // Swung around the head rather than slid sideways, so the panel's middle is as close as the palm (less
+            // Closer Than Palm) instead of drifting behind the hand
+            float swing = Mathf.Min((gapRightOfPalm + (panelMaxX - panelMinX) * 0.5f) / palmDistance, Mathf.PI * 0.5f);
+            Vector3 toMiddle = Quaternion.AngleAxis(swing * Mathf.Rad2Deg, Vector3.up) * toPalm.normalized
+                * Mathf.Max(palmDistance - closerThanPalm, 0.1f);
+            Vector3 panelMiddle = head.position + toMiddle
+                + Vector3.up * (palmCenter.y - head.position.y + heightAbovePalm);
+
+            // Aim the panel's middle at the head, so both ends are equally far away
+            Quaternion rotation = Quaternion.LookRotation(panelMiddle - head.position, Vector3.up);
+            Vector3 target = panelMiddle - rotation * Vector3.right * ((panelMinX + panelMaxX) * 0.5f);
 
             // Snap into place when appearing, then follow smoothly to hide tracking jitter
             if (visibility <= 0f)

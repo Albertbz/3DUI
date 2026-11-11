@@ -1,6 +1,6 @@
 ---
 name: xr-sim-test
-description: Test this project's photo capture and wrist gallery without a headset, by running Play mode in the Meta XR Simulator and scripting hand poses, pinches, grabs and pokes from the Unity CLI. Use when asked to test, verify or check the wrist gallery, photo capture, pinch frame, grabbing or poking in the simulator, or after changing WristGallery, GalleryThumbnail (pinch drag), PokeButton, PhotoObject, PhotoResizeTransformer, hand grab alignment, PhotoCapture, PhotoLibrary, HandPinchManager or ImageBoundaryBox.
+description: Test this project's photo capture and wrist gallery without a headset, by running Play mode in the Meta XR Simulator and scripting hand poses, pinches, grabs and pokes from the Unity CLI. Use when asked to test, verify or check the wrist gallery, photo capture, pinch frame, grabbing or poking in the simulator, or after changing WristGallery, GalleryThumbnail (pinch drag), PokeButton, PhotoObject, PhotoResizeTransformer, SurfaceSnap (snapping photos to walls and tables), hand grab alignment, PhotoCapture, PhotoLibrary, HandPinchManager or ImageBoundaryBox.
 ---
 
 # Testing the photo feature in the Meta XR Simulator
@@ -48,7 +48,7 @@ $M xrsim input source --hand left --source none; sleep 1.5; ./ev.sh state.cs | h
 $M xrsim input source --hand left --source hand; sleep 2;   ./ev.sh state.cs | head -1   # back: visible
 ```
 
-Look at `shots/above_palm.png`. The thumbnails should be upright and evenly spaced, with ← on the left and → on the right. The arrow-to-arrow `width` angle should stay below ~50°. `upright` is against the head's up, so it drops a little when the head looks down; the gallery itself is kept upright against world up. The pose override moves the hand anchor, which decides whether the gallery shows, but not the hand joints: the gallery floats over the simulator's own (drawn) hand, at its palm joint. `abovePalm` is measured from that joint and equals Height Above Palm (the scene sets 0.2); `rightOfPalm` is the gallery centre's offset toward the viewer's right, which puts the panel's left edge Gap Right Of Palm (4 cm) from the palm.
+Look at `shots/above_palm.png`. The thumbnails should be upright and evenly spaced, with ← on the left and → on the right. The arrow-to-arrow `width` angle should stay below ~50°. `upright` is against the head's up, so it drops a little when the head looks down; the gallery itself is kept upright against world up and faces the head's position, not where it looks. The pose override moves the hand anchor, which decides whether the gallery shows, but not the hand joints: the gallery floats over the simulator's own (drawn) hand, at its palm joint. `abovePalm` is measured from that joint and equals Height Above Palm (the scene sets 0.2); `rightOfPalm` is the gallery centre's offset toward the viewer's right, which puts the panel's left edge Gap Right Of Palm (4 cm) from the palm.
 
 **2. Pinch capture.** Then compare the camera image with the saved photo.
 
@@ -107,6 +107,18 @@ Hands should stay on the same spots of the photo, the transform scale stays 1 an
 ```
 
 `resize_hands.cs` force-selects the photo with both `HandGrabInteractor`s. The simulator's tracked hands can't be moved from code, so it turns the photo inside the grab instead and measures how far each visual (synthetic) wrist ends up from the tracked wrist: 0 mm with the fix. The control run puts back `AlignOnGrab` and shows the visual wrists swinging ~13 cm away with the photo.
+
+**3c. Snapping to surfaces.** Uses the simulator's synthetic room, which MRUK loads the first time a photo appears (`room` should list WALL_FACE, TABLE, …).
+
+```bash
+./ev.sh snap.cs spawn; sleep 3; ./ev.sh snap.cs room
+./ev.sh snap.cs wall;   sleep 0.5; ./ev.sh snap.cs state   # held 8 cm from a wall, turned 20°: preview=True on the surface
+./ev.sh snap.cs release; sleep 0.6; ./ev.sh snap.cs state  # dist≈0.4cm, fwd·-n=1.000, up·worldUp=1.000, preview=False
+./ev.sh snap.cs table;  sleep 0.5; ./ev.sh snap.cs release; sleep 0.6; ./ev.sh snap.cs state   # flat on the table: fwd·-n=1.000, keeps its yaw
+for m in tilted far; do ./ev.sh snap.cs $m; sleep 0.5; ./ev.sh snap.cs release; sleep 0.5; ./ev.sh snap.cs state; done   # no snap: pose unchanged
+```
+
+`wall` may land on a door or window frame in front of the wall; that's a flat surface too. Render the preview with `./ev.sh snap.cs wall 0.1; sleep 0.5; ./ev.sh photo_look.cs snap_preview` (a dashed ghost straight on the wall behind the tilted photo), then release and render `snap_done` (solid rim, no flicker against the wall). The depth fallback isn't covered by `snap.cs`: the simulator's synthetic depth hits few surfaces.
 
 **4. Gallery interactions.**
 

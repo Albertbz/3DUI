@@ -29,6 +29,14 @@ namespace SpatialPhotos
         [SerializeField] private float minHeight = 0.05f;
         [SerializeField] private float maxHeight = 1.5f;
 
+        [Header("Snap to surfaces (let go near a wall or table)")]
+        [SerializeField] private bool snapEnabled = true;
+        [SerializeField] private float snapDistance = 0.12f;
+        [SerializeField] private float maxSnapAngle = 60f;   // How far the photo may be tilted away from the surface
+        [SerializeField] private float snapGap = 0.004f;     // In front of the surface, so the outline doesn't sink into it
+        [SerializeField] private float snapDuration = 0.15f;
+        [SerializeField] private float snapPreviewAppear = 0.6f;
+
         private static readonly int FlashAmountId = Shader.PropertyToID("_FlashAmount");
         private static readonly int AlphaId = Shader.PropertyToID("_Alpha");
         private static readonly int MainTexId = Shader.PropertyToID("_MainTex");
@@ -48,6 +56,9 @@ namespace SpatialPhotos
         private int hoverCount;
         private HandGrabInteractable[] handGrabInteractables;
         private HandAlignType handAlignment;
+        private FrameOutline snapPreview;
+        private Pose? snapTarget;
+        private Coroutine snapRoutine;
 
         // Recent positions while held, used to estimate release velocity
         private const int VelocitySamples = 5;
@@ -72,6 +83,18 @@ namespace SpatialPhotos
             outline.Padding = 0.015f;
             outline.DashLength = 0.015f;
             outline.Dashed = false;
+
+            // Where the photo will land when let go near a surface. Not a child, so it stays put while the photo moves
+            snapPreview = FrameOutline.Create(transform, "SnapPreview");
+            snapPreview.transform.SetParent(null, false);
+            snapPreview.Thickness = outlineThickness;
+            snapPreview.CornerRadius = outline.CornerRadius;
+            snapPreview.Padding = outline.Padding;
+            snapPreview.DashLength = outline.DashLength;
+            snapPreview.Dashed = true;
+            snapPreview.Appear = snapPreviewAppear;
+            snapPreview.gameObject.SetActive(false);
+            SurfaceSnap.LoadScene();
 
             // One hand moves and turns the photo; two hands also resize it
             if (grabbable is Grabbable grab)
@@ -103,6 +126,8 @@ namespace SpatialPhotos
             }
             hoverCount = 0;
             SetHeld(false);
+            ClearSnapTarget();
+            snapRoutine = null;
         }
 
         private void OnDestroy()
@@ -110,6 +135,10 @@ namespace SpatialPhotos
             if (material != null)
             {
                 Destroy(material);
+            }
+            if (snapPreview != null)
+            {
+                Destroy(snapPreview.gameObject);
             }
             ReleaseOwnedTexture();
         }
@@ -152,6 +181,7 @@ namespace SpatialPhotos
             photoRenderer.transform.localScale = new Vector3(size.x, size.y, 1f);
             grabCollider.size = new Vector3(size.x, size.y, 0.01f);
             outline.Size = size + Vector2.one * (outlineGap * 2f);
+            snapPreview.Size = outline.Size;
         }
 
         private void HandlePointerEvent(PointerEvent evt)
@@ -212,6 +242,12 @@ namespace SpatialPhotos
             }
             IsHeld = held;
             heldCount += held ? 1 : -1;
+            if (held && snapRoutine != null)
+            {
+                // Grabbed again while settling onto a surface
+                StopCoroutine(snapRoutine);
+                snapRoutine = null;
+            }
 
             // The first hand's visual locks onto the photo as usual. A hand that joins while the photo is held,
             // and the first hand when it does, is left free: resizing changes the photo but not its transform's
@@ -232,6 +268,7 @@ namespace SpatialPhotos
                 sampleTimes[sampleIndex] = Time.time;
                 sampleIndex = (sampleIndex + 1) % VelocitySamples;
                 sampleCount = Mathf.Min(sampleCount + 1, VelocitySamples);
+                UpdateSnapTarget();
             }
 
             if (transform.position.y < destroyBelowY)
@@ -253,19 +290,69 @@ namespace SpatialPhotos
             return dt > 0f ? (samplePositions[newest] - samplePositions[oldest]) / dt : Vector3.zero;
         }
 
+        private void UpdateSnapTarget()
+        {
+            Transform viewer = XRRig.Head;
+            if (dismissing || !snapEnabled
+                || !SurfaceSnap.TryFind(transform.position, transform.forward, snapDistance, out Vector3 point, out Vector3 normal)
+                || Vector3.Angle(transform.forward, -normal) > maxSnapAngle)
+            {
+                ClearSnapTarget();
+                return;
+            }
+
+            Pose target = SurfaceSnap.PoseOnSurface(point, normal, transform.rotation,
+                viewer != null ? viewer.position : transform.position, snapGap);
+            snapTarget = target;
+            // The outline sits just behind the photo, as on the photo itself
+            snapPreview.transform.SetPositionAndRotation(target.position + target.rotation * new Vector3(0f, 0f, 0.001f), target.rotation);
+            snapPreview.gameObject.SetActive(true);
+        }
+
+        private void ClearSnapTarget()
+        {
+            snapTarget = null;
+            if (snapPreview != null)
+            {
+                snapPreview.gameObject.SetActive(false);
+            }
+        }
+
         private void HandleRelease()
         {
+            Pose? target = snapTarget;
+            ClearSnapTarget();
+
             Vector3 velocity = EstimateVelocity();
             if (velocity.magnitude > throwDeleteSpeed)
             {
                 StartCoroutine(DismissRoutine(velocity));
+                return;
             }
-            else
+
+            // Stay floating where it was let go, or settle onto the surface it was let go near
+            body.isKinematic = true;
+            body.useGravity = false;
+            if (target.HasValue)
             {
-                // Stay floating where it was let go
-                body.isKinematic = true;
-                body.useGravity = false;
+                snapRoutine = StartCoroutine(SnapRoutine(target.Value));
             }
+        }
+
+        private IEnumerator SnapRoutine(Pose target)
+        {
+            outline.Activity = 1f;
+            Vector3 startPosition = transform.position;
+            Quaternion startRotation = transform.rotation;
+            for (float t = 0f; t < snapDuration; t += Time.deltaTime)
+            {
+                float k = Mathf.SmoothStep(0f, 1f, t / snapDuration);
+                transform.SetPositionAndRotation(Vector3.Lerp(startPosition, target.position, k),
+                    Quaternion.Slerp(startRotation, target.rotation, k));
+                yield return null;
+            }
+            transform.SetPositionAndRotation(target.position, target.rotation);
+            snapRoutine = null;
         }
 
         private IEnumerator DismissRoutine(Vector3 velocity)
